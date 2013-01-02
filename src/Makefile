@@ -2,6 +2,7 @@ TARGETS	= ../include/VFS.h VFS
 PREFIX	= /usr/local
 DESTDIR	=
 BINDIR	= $(PREFIX)/bin
+SBINDIR	= $(PREFIX)/sbin
 CC	?= cc
 CPPFLAGSF?=
 CPPFLAGS=
@@ -17,8 +18,8 @@ INSTALL	?= install
 
 all: $(TARGETS)
 
-../include/VFS.h: ../include/VFS.interface
-	../include/appbroker.sh -P "$(PREFIX)" -- "../include/VFS.h"
+../include/VFS.h: ../data/VFS.interface
+	../data/appbroker.sh -P "$(PREFIX)" -- "../include/VFS.h"
 
 VFS_OBJS = vfs.o main.o
 VFS_CFLAGS = $(CPPFLAGSF) $(CPPFLAGS) $(CFLAGSF) $(CFLAGS)
