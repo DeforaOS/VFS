@@ -11,7 +11,7 @@ INCLUDEDIR= $(PREFIX)/include
 all: $(TARGETS)
 
 VFS.h: ../data/VFS.interface
-	./appbroker.sh -P "$(PREFIX)" -- "VFS.h"
+	../data/appbroker.sh -P "$(PREFIX)" -- "VFS.h"
 
 clean:
 	$(RM) -- $(VFS.h_OBJS)

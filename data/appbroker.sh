@@ -52,5 +52,5 @@ if [ $# -ne 1 ]; then
 	exit $?
 fi
 
-APPINTERFACE="${1%%.h}.interface"
+APPINTERFACE="../data/${1%%.h}.interface"
 AppBroker -o "$1" "$APPINTERFACE"
