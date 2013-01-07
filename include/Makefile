@@ -15,6 +15,7 @@ VFS.h: ../data/VFS.interface
 
 clean:
 	$(RM) -- $(VFS.h_OBJS)
+	../data/appbroker.sh -c -P "$(PREFIX)" -- "VFS.h"
 
 distclean: clean
 	$(RM) -- $(TARGETS)
