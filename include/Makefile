@@ -22,7 +22,7 @@ distclean: clean
 
 install: $(TARGETS)
 	$(MKDIR) $(DESTDIR)$(INCLUDEDIR)
-	$(INSTALL) -m 0644 -- VFS.h $(DESTDIR)$(INCLUDEDIR)/VFS.h
+	$(INSTALL) -m 0644 VFS.h $(DESTDIR)$(INCLUDEDIR)/VFS.h
 
 uninstall:
 	$(RM) -- $(DESTDIR)$(INCLUDEDIR)/VFS.h

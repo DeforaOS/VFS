@@ -42,7 +42,7 @@ distclean: clean
 
 install: $(TARGETS)
 	$(MKDIR) $(DESTDIR)$(BINDIR)
-	$(INSTALL) -m 0755 -- VFS $(DESTDIR)$(BINDIR)/VFS
+	$(INSTALL) -m 0755 VFS $(DESTDIR)$(BINDIR)/VFS
 
 uninstall:
 	$(RM) -- $(DESTDIR)$(BINDIR)/VFS

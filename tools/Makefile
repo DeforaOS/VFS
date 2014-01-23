@@ -38,7 +38,7 @@ distclean: clean
 
 install: $(TARGETS)
 	$(MKDIR) $(DESTDIR)$(PREFIX)/lib/AppWrapper
-	$(INSTALL) -m 0644 -- libVFS.so $(DESTDIR)$(PREFIX)/lib/AppWrapper/libVFS.so
+	$(INSTALL) -m 0644 libVFS.so $(DESTDIR)$(PREFIX)/lib/AppWrapper/libVFS.so
 
 uninstall:
 	$(RM) -- $(DESTDIR)$(PREFIX)/lib/AppWrapper/libVFS.so
