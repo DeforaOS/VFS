@@ -1,5 +1,5 @@
 /* $Id$ */
-/* Copyright (c) 2011 Pierre Pronchery <khorben@defora.org> */
+/* Copyright (c) 2010-2014 Pierre Pronchery <khorben@defora.org> */
 /* This file is part of DeforaOS System VFS */
 /* This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 
 
 /* VFS */
-int vfs(AppServerOptions options, mode_t mask, char const * root);
+int vfs(AppServerOptions options, char const * name, mode_t mask,
+		char const * root);
 
 #endif /* !VFS_SRC_VFS_H */

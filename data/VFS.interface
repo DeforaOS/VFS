@@ -1,6 +1,5 @@
 #$Id$
 service=VFS
-port=4245
 
 [constants]
 #access

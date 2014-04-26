@@ -1,5 +1,5 @@
 /* $Id$ */
-/* Copyright (c) 2010-2012 Pierre Pronchery <khorben@defora.org> */
+/* Copyright (c) 2010-2014 Pierre Pronchery <khorben@defora.org> */
 /* This file is part of DeforaOS System VFS */
 /* This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
 /* usage */
 static int _usage(void)
 {
-	fputs("Usage: " PACKAGE " [-L|-R][-r root][-u umask]\n", stderr);
+	fputs("Usage: " PACKAGE " [-R][-r root][-u umask]\n", stderr);
 	return 1;
 }
 
@@ -36,21 +36,19 @@ static int _usage(void)
 int main(int argc, char * argv[])
 {
 	int o;
-	AppServerOptions options = ASO_LOCAL;
+	AppServerOptions options = 0;
+	char const * name = NULL;
 	char * root = "/";
 	mode_t mask;
 	char * p;
 
 	mask = umask(0);
 	umask(mask);
-	while((o = getopt(argc, argv, "LRr:u:")) != -1)
+	while((o = getopt(argc, argv, "Rr:u:")) != -1)
 		switch(o)
 		{
-			case 'L':
-				options = ASO_LOCAL;
-				break;
 			case 'R':
-				options = ASO_REMOTE;
+				options |= ASO_REGISTER;
 				break;
 			case 'r':
 				root = optarg;
@@ -65,5 +63,5 @@ int main(int argc, char * argv[])
 		}
 	if(optind != argc)
 		return _usage();
-	return (vfs(options, mask, root) == 0) ? 0 : 2;
+	return (vfs(options, name, mask, root) == 0) ? 0 : 2;
 }

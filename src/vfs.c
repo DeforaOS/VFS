@@ -1,5 +1,5 @@
 /* $Id$ */
-/* Copyright (c) 2011 Pierre Pronchery <khorben@defora.org> */
+/* Copyright (c) 2006-2014 Pierre Pronchery <khorben@defora.org> */
 /* This file is part of DeforaOS System VFS */
 /* This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ typedef struct _VFSFile
 
 typedef struct _VFSClient
 {
-	void * id;
+	AppServerClient * client;
 	mode_t umask;
 	VFSFile * files;
 	size_t files_cnt;
@@ -62,7 +62,7 @@ static size_t _clients_cnt;
 /* macros */
 #if 1
 # define VFS_STUB1(type, name, type1, arg1) \
-	type VFS_ ## name(type1 arg1) \
+	type VFS_ ## name(AppServerClient * client, type1 arg1) \
 { \
 	int res; \
 	if((res = name(arg1)) != 0) \
@@ -75,7 +75,7 @@ static size_t _clients_cnt;
 #endif
 
 #define VFS_STUB2(type, name, type1, arg1, type2, arg2) \
-	type VFS_ ## name(type1 arg1, type2 arg2) \
+	type VFS_ ## name(AppServerClient * client, type1 arg1, type2 arg2) \
 { \
 	int res; \
 	if((res = name(arg1, arg2)) != 0) \
@@ -84,7 +84,8 @@ static size_t _clients_cnt;
 }
 
 #define VFS_STUB3(type, name, type1, arg1, type2, arg2, type3, arg3) \
-	type VFS_ ## name(type1 arg1, type2 arg2, type3 arg3) \
+	type VFS_ ## name(AppServerClient * client, type1 arg1, type2 arg2, \
+			type3 arg3) \
 { \
 	return name(arg1, arg2, arg3); \
 }
@@ -96,26 +97,27 @@ static void _client_init(void);
 static void _client_destroy(void);
 
 /* accessors */
-static VFSClient * _client_get(void);
-static mode_t _client_get_umask(void);
-static int _client_set_umask(mode_t mask);
+static VFSClient * _client_get(AppServerClient * client);
+static mode_t _client_get_umask(AppServerClient * client);
+static int _client_set_umask(AppServerClient * client, mode_t mask);
 
-static int _client_check(int32_t fd);
-static DIR * _client_check_dir(int32_t fd);
+static int _client_check(AppServerClient * client, int32_t fd);
+static DIR * _client_check_dir(AppServerClient * client, int32_t fd);
 
 /* useful */
-static VFSClient * _client_add(void);
-static int _client_add_file(int32_t fd, DIR * dir);
-static int _client_remove_file(int32_t fd);
+static VFSClient * _client_add(AppServerClient * client);
+static int _client_add_file(AppServerClient * client, int32_t fd, DIR * dir);
+static int _client_remove_file(AppServerClient * client, int32_t fd);
 
 
 /* public */
 /* functions */
 /* vfs */
-int vfs(AppServerOptions options, mode_t mask, char const * root)
+int vfs(AppServerOptions options, char const * name, mode_t mask,
+		char const * root)
 	/* FIXME implement root */
 {
-	if((_appserver = appserver_new("VFS", options)) == NULL)
+	if((_appserver = appserver_new(options, "VFS", name)) == NULL)
 	{
 		error_print(PACKAGE);
 		return 1;
@@ -144,7 +146,7 @@ VFS_STUB1(int32_t, unlink, String const *, path)
 
 /* interface */
 /* VFS_access */
-int32_t VFS_access(String const * path, uint32_t mode)
+int32_t VFS_access(AppServerClient * client, String const * path, uint32_t mode)
 {
 	int vfsmode;
 
@@ -158,17 +160,17 @@ int32_t VFS_access(String const * path, uint32_t mode)
 
 
 /* VFS_close */
-int32_t VFS_close(int32_t fd)
+int32_t VFS_close(AppServerClient * client, int32_t fd)
 {
 	int32_t ret;
 
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, fd);
 #endif
 	if((ret = close(fd)) == 0)
-		_client_remove_file(fd);
+		_client_remove_file(client, fd);
 	else
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
@@ -176,18 +178,18 @@ int32_t VFS_close(int32_t fd)
 
 
 /* VFS_closedir */
-int32_t VFS_closedir(int32_t dir)
+int32_t VFS_closedir(AppServerClient * client, int32_t dir)
 {
 	int32_t ret;
 	DIR * d;
 
-	if((d = _client_check_dir(dir)) == NULL)
+	if((d = _client_check_dir(client, dir)) == NULL)
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, dir);
 #endif
 	if((ret = closedir(d)) == 0)
-		_client_remove_file(dir);
+		_client_remove_file(client, dir);
 	else
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
@@ -195,9 +197,9 @@ int32_t VFS_closedir(int32_t dir)
 
 
 /* VFS_dirfd */
-int32_t VFS_dirfd(int32_t dir)
+int32_t VFS_dirfd(AppServerClient * client, int32_t dir)
 {
-	if(_client_check_dir(dir) == NULL)
+	if(_client_check_dir(client, dir) == NULL)
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, dir);
@@ -207,9 +209,9 @@ int32_t VFS_dirfd(int32_t dir)
 
 
 /* VFS_fchmod */
-int32_t VFS_fchmod(int32_t fd, uint32_t mode)
+int32_t VFS_fchmod(AppServerClient * client, int32_t fd, uint32_t mode)
 {
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 	if(fchmod(fd, mode) != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
@@ -218,9 +220,10 @@ int32_t VFS_fchmod(int32_t fd, uint32_t mode)
 
 
 /* VFS_fchown */
-int32_t VFS_fchown(int32_t fd, uint32_t owner, uint32_t group)
+int32_t VFS_fchown(AppServerClient * client, int32_t fd, uint32_t owner,
+		uint32_t group)
 {
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 	if(fchown(fd, owner, group) != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
@@ -229,9 +232,9 @@ int32_t VFS_fchown(int32_t fd, uint32_t owner, uint32_t group)
 
 
 /* VFS_flock */
-int32_t VFS_flock(int32_t fd, uint32_t operation)
+int32_t VFS_flock(AppServerClient * client, int32_t fd, uint32_t operation)
 {
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 	if(flock(fd, operation) != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
@@ -240,12 +243,13 @@ int32_t VFS_flock(int32_t fd, uint32_t operation)
 
 
 /* VFS_lseek */
-int32_t VFS_lseek(int32_t fd, int32_t offset, int32_t whence)
+int32_t VFS_lseek(AppServerClient * client, int32_t fd, int32_t offset,
+		int32_t whence)
 	/* FIXME check types sizes */
 {
 	int ret;
 
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d, %d, %d)\n", __func__, fd, offset,
@@ -261,11 +265,11 @@ int32_t VFS_lseek(int32_t fd, int32_t offset, int32_t whence)
 
 
 /* VFS_mkdir */
-int32_t VFS_mkdir(String const * path, uint32_t mode)
+int32_t VFS_mkdir(AppServerClient * client, String const * path, uint32_t mode)
 {
 	mode_t mask;
 
-	mask = _client_get_umask();
+	mask = _client_get_umask(client);
 	if(mkdir(path, mode & mask) != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
@@ -273,7 +277,8 @@ int32_t VFS_mkdir(String const * path, uint32_t mode)
 
 
 /* VFS_open */
-int32_t VFS_open(String const * filename, uint32_t flags, uint32_t mode)
+int32_t VFS_open(AppServerClient * client, String const * filename,
+		uint32_t flags, uint32_t mode)
 {
 	int vfsflags;
 	int mask;
@@ -282,7 +287,7 @@ int32_t VFS_open(String const * filename, uint32_t flags, uint32_t mode)
 	if((vfsflags = _vfs_flags(_vfs_flags_open, _vfs_flags_open_cnt, flags,
 					0)) < 0)
 		return -1;
-	mask = _client_get_umask();
+	mask = _client_get_umask(client);
 	fd = open(filename, vfsflags, mode & mask);
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(\"%s\", %u, %u) => %d\n", __func__, filename,
@@ -290,7 +295,7 @@ int32_t VFS_open(String const * filename, uint32_t flags, uint32_t mode)
 #endif
 	if(fd < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
-	if(_client_add_file(fd, NULL) != 0)
+	if(_client_add_file(client, fd, NULL) != 0)
 	{
 		close(fd);
 		return -VFS_EPROTO;
@@ -300,7 +305,7 @@ int32_t VFS_open(String const * filename, uint32_t flags, uint32_t mode)
 
 
 /* VFS_opendir */
-int32_t VFS_opendir(String const * filename)
+int32_t VFS_opendir(AppServerClient * client, String const * filename)
 {
 	DIR * dir;
 	int fd;
@@ -323,7 +328,7 @@ int32_t VFS_opendir(String const * filename)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	}
 #endif
-	if(_client_add_file(fd, dir) != 0)
+	if(_client_add_file(client, fd, dir) != 0)
 	{
 		closedir(dir);
 		return -VFS_EPROTO;
@@ -333,11 +338,12 @@ int32_t VFS_opendir(String const * filename)
 
 
 /* VFS_read */
-int32_t VFS_read(int32_t fd, Buffer * b, uint32_t size)
+int32_t VFS_read(AppServerClient * client, int32_t fd, Buffer * b,
+		uint32_t size)
 {
 	int32_t ret;
 
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d, %p, %u)\n", __func__, fd, (void*)b,
@@ -365,12 +371,12 @@ int32_t VFS_read(int32_t fd, Buffer * b, uint32_t size)
 
 
 /* VFS_readdir */
-int32_t VFS_readdir(int32_t dir, String ** string)
+int32_t VFS_readdir(AppServerClient * client, int32_t dir, String ** string)
 {
 	DIR * d;
 	struct dirent * de;
 
-	if((d = _client_check_dir(dir)) == NULL)
+	if((d = _client_check_dir(client, dir)) == NULL)
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d, %p)\n", __func__, dir, (void *)string);
@@ -386,11 +392,11 @@ int32_t VFS_readdir(int32_t dir, String ** string)
 
 
 /* VFS_rewinddir */
-int32_t VFS_rewinddir(int32_t dir)
+int32_t VFS_rewinddir(AppServerClient * client, int32_t dir)
 {
 	DIR * d;
 
-	if((d = _client_check_dir(dir)) == NULL)
+	if((d = _client_check_dir(client, dir)) == NULL)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, dir);
@@ -401,20 +407,21 @@ int32_t VFS_rewinddir(int32_t dir)
 
 
 /* VFS_umask */
-uint32_t VFS_umask(uint32_t mask)
+uint32_t VFS_umask(AppServerClient * client, uint32_t mask)
 {
 	mode_t ret;
 
-	ret = _client_get_umask();
-	_client_set_umask(mask); /* XXX may fail */
+	ret = _client_get_umask(client);
+	_client_set_umask(client, mask); /* XXX may fail */
 	return ret;
 }
 
 
 /* VFS_write */
-int32_t VFS_write(int32_t fd, Buffer * b, uint32_t size)
+int32_t VFS_write(AppServerClient * client, int32_t fd, Buffer * b,
+		uint32_t size)
 {
-	if(!_client_check(fd))
+	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d, buf, %u)\n", __func__, fd, size);
@@ -446,30 +453,24 @@ static void _client_destroy(void)
 
 /* accessors */
 /* client_get */
-static VFSClient * _client_get(void)
+static VFSClient * _client_get(AppServerClient * client)
 {
-	void * id;
 	size_t i;
 
-	if((id = appserver_get_client_id(_appserver)) == NULL)
-	{
-		error_print(PACKAGE);
-		return NULL;
-	}
 	for(i = 0; i < _clients_cnt; i++)
-		if(_clients[i].id == id)
+		if(_clients[i].client == client)
 			return &_clients[i];
 	return NULL;
 }
 
 
 /* client_get_umask */
-static mode_t _client_get_umask(void)
+static mode_t _client_get_umask(AppServerClient * client)
 {
 	VFSClient * p;
 	mode_t omask;
 
-	if((p = _client_get()) != NULL)
+	if((p = _client_get(client)) != NULL)
 		return p->umask;
 	omask = umask(0); /* obtain the default umask and restore it */
 	umask(omask);
@@ -478,11 +479,11 @@ static mode_t _client_get_umask(void)
 
 
 /* client_set_umask */
-static int _client_set_umask(mode_t mask)
+static int _client_set_umask(AppServerClient * client, mode_t mask)
 {
 	VFSClient * p;
 
-	if((p = _client_add()) == NULL)
+	if((p = _client_get(client)) == NULL)
 		return 1;
 	p->umask = mask;
 	return 0;
@@ -490,55 +491,49 @@ static int _client_set_umask(mode_t mask)
 
 
 /* client_check */
-static int _client_check(int32_t fd)
+static int _client_check(AppServerClient * client, int32_t fd)
 {
-	VFSClient * client;
+	VFSClient * c;
 	size_t i;
 
-	if((client = _client_get()) == NULL)
+	if((c = _client_get(client)) == NULL)
 		return 0;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, fd);
 #endif
-	for(i = 0; i < client->files_cnt; i++)
-		if(client->files[i].fd == fd)
-			return (client->files[i].dir == NULL) ? 1 : 0;
+	for(i = 0; i < c->files_cnt; i++)
+		if(c->files[i].fd == fd)
+			return (c->files[i].dir == NULL) ? 1 : 0;
 	return 0;
 }
 
 
 /* client_check_dir */
-static DIR * _client_check_dir(int32_t fd)
+static DIR * _client_check_dir(AppServerClient * client, int32_t fd)
 {
-	VFSClient * client;
+	VFSClient * c;
 	size_t i;
 
-	if((client = _client_get()) == NULL)
+	if((c = _client_get(client)) == NULL)
 		return NULL;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, fd);
 #endif
-	for(i = 0; i < client->files_cnt; i++)
-		if(client->files[i].fd == fd)
-			return client->files[i].dir;
+	for(i = 0; i < c->files_cnt; i++)
+		if(c->files[i].fd == fd)
+			return c->files[i].dir;
 	return NULL;
 }
 
 
 /* useful */
 /* client_add */
-static VFSClient * _client_add(void)
+static VFSClient * _client_add(AppServerClient * client)
 {
 	VFSClient * p;
-	void * id;
 
-	if((p = _client_get()) != NULL)
+	if((p = _client_get(client)) != NULL)
 		return p;
-	if((id = appserver_get_client_id(_appserver)) == NULL)
-	{
-		error_print(PACKAGE);
-		return NULL;
-	}
 	if((p = realloc(_clients, sizeof(*p) * (_clients_cnt + 1))) == NULL)
 	{
 		error_set_print(PACKAGE, 1, "%s", strerror(errno));
@@ -546,7 +541,7 @@ static VFSClient * _client_add(void)
 	}
 	_clients = p;
 	p = &_clients[_clients_cnt++];
-	p->id = id;
+	p->client = client;
 	p->umask = umask(0);
 	umask(p->umask); /* restore umask */
 	p->files = NULL;
@@ -556,18 +551,18 @@ static VFSClient * _client_add(void)
 
 
 /* client_add_file */
-static int _client_add_file(int32_t fd, DIR * dir)
+static int _client_add_file(AppServerClient * client, int32_t fd, DIR * dir)
 {
-	VFSClient * client;
+	VFSClient * c;
 	VFSFile * p;
 
-	if((client = _client_add()) == NULL)
+	if((c = _client_add(client)) == NULL)
 		return 1;
-	if((p = realloc(client->files, sizeof(*p) * (client->files_cnt + 1)))
+	if((p = realloc(c->files, sizeof(*p) * (c->files_cnt + 1)))
 			== NULL)
 		return error_set_print(PACKAGE, 1, "%s", strerror(errno));
-	client->files = p;
-	p = &client->files[client->files_cnt++];
+	c->files = p;
+	p = &c->files[c->files_cnt++];
 	p->fd = fd;
 	p->dir = dir;
 	return 0;
@@ -575,25 +570,25 @@ static int _client_add_file(int32_t fd, DIR * dir)
 
 
 /* client_remove_file */
-static int _client_remove_file(int32_t fd)
+static int _client_remove_file(AppServerClient * client, int32_t fd)
 {
-	VFSClient * client;
+	VFSClient * c;
 	size_t i;
 	VFSFile * p;
 
 	if(fd < 0) /* XXX should never happen */
 		return error_set_print(PACKAGE, 1, "%s", strerror(EINVAL));
-	if((client = _client_get()) == NULL)
+	if((c = _client_get(client)) == NULL)
 		return 1;
-	for(i = 0; i < client->files_cnt; i++)
-		if(client->files[i].fd == fd)
+	for(i = 0; i < c->files_cnt; i++)
+		if(c->files[i].fd == fd)
 			break;
-	if(i == client->files_cnt)
+	if(i == c->files_cnt)
 		return 0;
-	p = &client->files[i];
-	memmove(p, p + 1, (--client->files_cnt - i) * sizeof(*p));
-	if((p = realloc(client->files, sizeof(*p) * client->files_cnt))
-			!= NULL || client->files_cnt == 0)
-		client->files = p; /* we can ignore errors */
+	p = &c->files[i];
+	memmove(p, p + 1, (--c->files_cnt - i) * sizeof(*p));
+	if((p = realloc(c->files, sizeof(*p) * c->files_cnt)) != NULL
+			|| c->files_cnt == 0)
+		c->files = p; /* we can ignore errors */
 	return 0;
 }

@@ -150,7 +150,7 @@ static void _libvfs_init(void)
 			exit(1);
 		}
 	dlclose(hdl);
-	if((_appclient = appclient_new("VFS")) == NULL)
+	if((_appclient = appclient_new("VFS", NULL)) == NULL)
 	{
 		error_print(PROGNAME);
 		exit(1);
@@ -174,7 +174,7 @@ int access(const char * path, int mode)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, &ret, "access", path, mode) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "access", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: access(\"%s\", %o) => %d\n", path, mode, ret);
@@ -191,7 +191,7 @@ int chmod(char const * path, mode_t mode)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_chmod(path, mode);
-	if(appclient_call(_appclient, &ret, "chmod", path, mode) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "chmod", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: chmod(\"%s\", %o) => %d\n", path, mode, ret);
@@ -210,7 +210,8 @@ int chown(char const * path, uid_t uid, gid_t gid)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_chown(path, uid, gid);
-	if(appclient_call(_appclient, &ret, "chown", path, uid, gid) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "chown", path, uid, gid)
+			!= 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: chown(\"%s\", %d, %d) => %d\n", path, uid, gid,
@@ -230,7 +231,8 @@ int close(int fd)
 	_libvfs_init();
 	if(fd < VFS_OFFSET)
 		return old_close(fd);
-	if(appclient_call(_appclient, &ret, "close", fd - VFS_OFFSET) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "close", fd - VFS_OFFSET)
+			!= 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: close(%d) => %d\n", fd - VFS_OFFSET, ret);
@@ -260,7 +262,7 @@ int closedir(DIR * dir)
 	if(fd < 0)
 		return old_closedir(dir);
 #endif
-	else if(appclient_call(_appclient, &ret, "closedir", fd) != 0)
+	else if(appclient_call(_appclient, (void **)&ret, "closedir", fd) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: closedir(%p) => %d\n", (void *)dir, ret);
@@ -288,7 +290,7 @@ int dirfd(DIR * dir)
 	_libvfs_init();
 	if(d->dir != NULL)
 		ret = old_dirfd(d->dir);
-	else if(appclient_call(_appclient, &ret, "dirfd", d->fd) != 0)
+	else if(appclient_call(_appclient, (void **)&ret, "dirfd", d->fd) != 0)
 		return -1;
 # ifdef DEBUG
 	fprintf(stderr, "DEBUG: dirfd(%p) => %d\n", (void *)dir, ret);
@@ -326,7 +328,8 @@ int lchown(char const * path, uid_t uid, gid_t gid)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_lchown(path, uid, gid);
-	if(appclient_call(_appclient, &ret, "lchown", path, uid, gid) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "lchown", path, uid, gid)
+			!= 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: lchown(\"%s\", %d, %d) => %d\n", path, uid, gid,
@@ -352,8 +355,8 @@ off_t lseek(int fd, off_t offset, int whence)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, &ret, "lseek", fd - VFS_OFFSET, offset,
-				whence) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "lseek", fd - VFS_OFFSET,
+				offset, whence) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: lseek(%d, %ld, %d) => %d\n", fd - VFS_OFFSET,
@@ -391,7 +394,7 @@ int mkdir(char const * path, mode_t mode)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_mkdir(path, mode);
-	if(appclient_call(_appclient, &ret, "mkdir", path, mode) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "mkdir", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: mkdir(\"%s\", %d) => %d\n", path, mode, ret);
@@ -437,7 +440,8 @@ int open(const char * path, int flags, ...)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, &ret, "open", path, vfsflags, mode) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "open", path, vfsflags,
+				mode) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: open(\"%s\", %d, %#o) => %d\n", path, flags,
@@ -487,7 +491,8 @@ DIR * opendir(char const * path)
 		return old_opendir(path);
 	if((dir = old_opendir("/")) == NULL) /* XXX quite ugly */
 		return NULL;
-	if(appclient_call(_appclient, &fd, "opendir", path) != 0 || fd < 0)
+	if(appclient_call(_appclient, (void **)&fd, "opendir", path) != 0
+			|| fd < 0)
 	{
 		old_closedir(dir);
 		return NULL;
@@ -514,7 +519,7 @@ ssize_t read(int fd, void * buf, size_t count)
 	fd -= VFS_OFFSET;
 	if((b = buffer_new(0, NULL)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, &ret, "read", fd, b, count) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "read", fd, b, count) != 0)
 	{
 		buffer_delete(b);
 		/* FIXME define errno */
@@ -553,7 +558,8 @@ struct dirent * readdir(DIR * dir)
 		return old_readdir(dir);
 	fd = dirfd(dir) - VFS_OFFSET;
 #endif
-	if(appclient_call(_appclient, &res, "readdir", fd, &filename) != 0)
+	if(appclient_call(_appclient, (void **)&res, "readdir", fd, &filename)
+			!= 0)
 		return NULL;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: readdir(%p %d) => %d\n", (void *)dir, fd, res);
@@ -595,7 +601,7 @@ int rename(char const * from, char const * to)
 		errno = EXDEV;
 		return -1;
 	}
-	if(appclient_call(_appclient, &ret, "rename", from, to) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "rename", from, to) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: rename(\"%s\", \"%s\") => %d\n", from, to, ret);
@@ -643,7 +649,7 @@ int rmdir(char const * path)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_rmdir(path);
-	if(appclient_call(_appclient, &ret, "rmdir", path) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "rmdir", path) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: rmdir(\"%s\") => %d\n", path, ret);
@@ -680,7 +686,8 @@ int symlink(char const * name1, char const * name2)
 	_libvfs_init();
 	if(strncmp(_vfs_root, name2, VFS_ROOT_SIZE) != 0)
 		return old_symlink(name1, name2);
-	if(appclient_call(_appclient, &ret, "symlink", name1, name2) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "symlink", name1, name2)
+			!= 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: symlink(\"%s\", \"%s\") => %d\n", name1, name2,
@@ -703,7 +710,7 @@ mode_t umask(mode_t mode)
 	fprintf(stderr, "DEBUG: umask(%o)\n", mode);
 #endif
 	/* FIXME what to do if it fails? */
-	appclient_call(_appclient, (int*)&ret, "umask", mode);
+	appclient_call(_appclient, (void **)&ret, "umask", mode);
 	return umask(mode);
 }
 
@@ -716,7 +723,7 @@ int unlink(char const * path)
 	_libvfs_init();
 	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
 		return old_unlink(path);
-	if(appclient_call(_appclient, &ret, "unlink", path) != 0)
+	if(appclient_call(_appclient, (void **)&ret, "unlink", path) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: unlink(\"%s\") => %d\n", path, ret);
@@ -738,7 +745,8 @@ ssize_t write(int fd, void const * buf, size_t count)
 		return old_write(fd, buf, count);
 	if((b = buffer_new(count, buf)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, &ret, "write", fd - VFS_OFFSET, b, count)
+	if(appclient_call(_appclient, (void **)&ret, "write", fd - VFS_OFFSET,
+				b, count)
 			!= 0)
 	{
 		buffer_delete(b);
