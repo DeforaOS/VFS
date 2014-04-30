@@ -150,7 +150,7 @@ static void _libvfs_init(void)
 			exit(1);
 		}
 	dlclose(hdl);
-	if((_appclient = appclient_new("VFS", NULL)) == NULL)
+	if((_appclient = appclient_new(NULL, "VFS", NULL)) == NULL)
 	{
 		error_print(PROGNAME);
 		exit(1);

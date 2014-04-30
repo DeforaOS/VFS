@@ -52,9 +52,13 @@ typedef struct _VFSClient
 	size_t files_cnt;
 } VFSClient;
 
+typedef struct _App
+{
+	AppServer * appserver;
+} VFS;
+
 
 /* variables */
-static AppServer * _appserver;
 static VFSClient * _clients;
 static size_t _clients_cnt;
 
@@ -62,7 +66,7 @@ static size_t _clients_cnt;
 /* macros */
 #if 1
 # define VFS_STUB1(type, name, type1, arg1) \
-	type VFS_ ## name(AppServerClient * client, type1 arg1) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1) \
 { \
 	int res; \
 	if((res = name(arg1)) != 0) \
@@ -75,7 +79,7 @@ static size_t _clients_cnt;
 #endif
 
 #define VFS_STUB2(type, name, type1, arg1, type2, arg2) \
-	type VFS_ ## name(AppServerClient * client, type1 arg1, type2 arg2) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2) \
 { \
 	int res; \
 	if((res = name(arg1, arg2)) != 0) \
@@ -84,7 +88,7 @@ static size_t _clients_cnt;
 }
 
 #define VFS_STUB3(type, name, type1, arg1, type2, arg2, type3, arg3) \
-	type VFS_ ## name(AppServerClient * client, type1 arg1, type2 arg2, \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2, \
 			type3 arg3) \
 { \
 	return name(arg1, arg2, arg3); \
@@ -117,16 +121,18 @@ int vfs(AppServerOptions options, char const * name, mode_t mask,
 		char const * root)
 	/* FIXME implement root */
 {
-	if((_appserver = appserver_new(options, "VFS", name)) == NULL)
+	VFS vfs;
+
+	if((vfs.appserver = appserver_new(&vfs, options, "VFS", name)) == NULL)
 	{
 		error_print(PACKAGE);
 		return 1;
 	}
 	umask(mask);
 	_client_init();
-	appserver_loop(_appserver);
+	appserver_loop(vfs.appserver);
 	_client_destroy();
-	appserver_delete(_appserver);
+	appserver_delete(vfs.appserver);
 	return 0;
 }
 
@@ -146,7 +152,8 @@ VFS_STUB1(int32_t, unlink, String const *, path)
 
 /* interface */
 /* VFS_access */
-int32_t VFS_access(AppServerClient * client, String const * path, uint32_t mode)
+int32_t VFS_access(VFS * vfs, AppServerClient * client, String const * path,
+		uint32_t mode)
 {
 	int vfsmode;
 
@@ -160,7 +167,7 @@ int32_t VFS_access(AppServerClient * client, String const * path, uint32_t mode)
 
 
 /* VFS_close */
-int32_t VFS_close(AppServerClient * client, int32_t fd)
+int32_t VFS_close(VFS * vfs, AppServerClient * client, int32_t fd)
 {
 	int32_t ret;
 
@@ -178,7 +185,7 @@ int32_t VFS_close(AppServerClient * client, int32_t fd)
 
 
 /* VFS_closedir */
-int32_t VFS_closedir(AppServerClient * client, int32_t dir)
+int32_t VFS_closedir(VFS * vfs, AppServerClient * client, int32_t dir)
 {
 	int32_t ret;
 	DIR * d;
@@ -197,7 +204,7 @@ int32_t VFS_closedir(AppServerClient * client, int32_t dir)
 
 
 /* VFS_dirfd */
-int32_t VFS_dirfd(AppServerClient * client, int32_t dir)
+int32_t VFS_dirfd(VFS * vfs, AppServerClient * client, int32_t dir)
 {
 	if(_client_check_dir(client, dir) == NULL)
 		return -VFS_EPROTO;
@@ -209,7 +216,8 @@ int32_t VFS_dirfd(AppServerClient * client, int32_t dir)
 
 
 /* VFS_fchmod */
-int32_t VFS_fchmod(AppServerClient * client, int32_t fd, uint32_t mode)
+int32_t VFS_fchmod(VFS * vfs, AppServerClient * client, int32_t fd,
+		uint32_t mode)
 {
 	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
@@ -220,8 +228,8 @@ int32_t VFS_fchmod(AppServerClient * client, int32_t fd, uint32_t mode)
 
 
 /* VFS_fchown */
-int32_t VFS_fchown(AppServerClient * client, int32_t fd, uint32_t owner,
-		uint32_t group)
+int32_t VFS_fchown(VFS * vfs, AppServerClient * client, int32_t fd,
+		uint32_t owner, uint32_t group)
 {
 	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
@@ -232,7 +240,8 @@ int32_t VFS_fchown(AppServerClient * client, int32_t fd, uint32_t owner,
 
 
 /* VFS_flock */
-int32_t VFS_flock(AppServerClient * client, int32_t fd, uint32_t operation)
+int32_t VFS_flock(VFS * vfs, AppServerClient * client, int32_t fd,
+		uint32_t operation)
 {
 	if(!_client_check(client, fd))
 		return -VFS_EPROTO;
@@ -243,8 +252,8 @@ int32_t VFS_flock(AppServerClient * client, int32_t fd, uint32_t operation)
 
 
 /* VFS_lseek */
-int32_t VFS_lseek(AppServerClient * client, int32_t fd, int32_t offset,
-		int32_t whence)
+int32_t VFS_lseek(VFS * vfs, AppServerClient * client, int32_t fd,
+		int32_t offset, int32_t whence)
 	/* FIXME check types sizes */
 {
 	int ret;
@@ -265,7 +274,8 @@ int32_t VFS_lseek(AppServerClient * client, int32_t fd, int32_t offset,
 
 
 /* VFS_mkdir */
-int32_t VFS_mkdir(AppServerClient * client, String const * path, uint32_t mode)
+int32_t VFS_mkdir(VFS * vfs, AppServerClient * client, String const * path,
+		uint32_t mode)
 {
 	mode_t mask;
 
@@ -277,7 +287,7 @@ int32_t VFS_mkdir(AppServerClient * client, String const * path, uint32_t mode)
 
 
 /* VFS_open */
-int32_t VFS_open(AppServerClient * client, String const * filename,
+int32_t VFS_open(VFS * vfs, AppServerClient * client, String const * filename,
 		uint32_t flags, uint32_t mode)
 {
 	int vfsflags;
@@ -305,7 +315,8 @@ int32_t VFS_open(AppServerClient * client, String const * filename,
 
 
 /* VFS_opendir */
-int32_t VFS_opendir(AppServerClient * client, String const * filename)
+int32_t VFS_opendir(VFS * vfs, AppServerClient * client,
+		String const * filename)
 {
 	DIR * dir;
 	int fd;
@@ -338,7 +349,7 @@ int32_t VFS_opendir(AppServerClient * client, String const * filename)
 
 
 /* VFS_read */
-int32_t VFS_read(AppServerClient * client, int32_t fd, Buffer * b,
+int32_t VFS_read(VFS * vfs, AppServerClient * client, int32_t fd, Buffer * b,
 		uint32_t size)
 {
 	int32_t ret;
@@ -371,7 +382,8 @@ int32_t VFS_read(AppServerClient * client, int32_t fd, Buffer * b,
 
 
 /* VFS_readdir */
-int32_t VFS_readdir(AppServerClient * client, int32_t dir, String ** string)
+int32_t VFS_readdir(VFS * vfs, AppServerClient * client, int32_t dir,
+		String ** string)
 {
 	DIR * d;
 	struct dirent * de;
@@ -392,7 +404,7 @@ int32_t VFS_readdir(AppServerClient * client, int32_t dir, String ** string)
 
 
 /* VFS_rewinddir */
-int32_t VFS_rewinddir(AppServerClient * client, int32_t dir)
+int32_t VFS_rewinddir(VFS * vfs, AppServerClient * client, int32_t dir)
 {
 	DIR * d;
 
@@ -407,7 +419,7 @@ int32_t VFS_rewinddir(AppServerClient * client, int32_t dir)
 
 
 /* VFS_umask */
-uint32_t VFS_umask(AppServerClient * client, uint32_t mask)
+uint32_t VFS_umask(VFS * vfs, AppServerClient * client, uint32_t mask)
 {
 	mode_t ret;
 
@@ -418,7 +430,7 @@ uint32_t VFS_umask(AppServerClient * client, uint32_t mask)
 
 
 /* VFS_write */
-int32_t VFS_write(AppServerClient * client, int32_t fd, Buffer * b,
+int32_t VFS_write(VFS * vfs, AppServerClient * client, int32_t fd, Buffer * b,
 		uint32_t size)
 {
 	if(!_client_check(client, fd))
