@@ -34,6 +34,10 @@
 #include "common.c"
 #include "../config.h"
 
+#ifndef PROGNAME
+# define PROGNAME PACKAGE
+#endif
+
 
 /* VFS */
 /* private */
@@ -125,7 +129,7 @@ int vfs(AppServerOptions options, char const * name, mode_t mask,
 
 	if((vfs.appserver = appserver_new(&vfs, options, "VFS", name)) == NULL)
 	{
-		error_print(PACKAGE);
+		error_print(PROGNAME);
 		return 1;
 	}
 	umask(mask);
@@ -548,7 +552,7 @@ static VFSClient * _client_add(AppServerClient * client)
 		return p;
 	if((p = realloc(_clients, sizeof(*p) * (_clients_cnt + 1))) == NULL)
 	{
-		error_set_print(PACKAGE, 1, "%s", strerror(errno));
+		error_set_print(PROGNAME, 1, "%s", strerror(errno));
 		return NULL;
 	}
 	_clients = p;
@@ -572,7 +576,7 @@ static int _client_add_file(AppServerClient * client, int32_t fd, DIR * dir)
 		return 1;
 	if((p = realloc(c->files, sizeof(*p) * (c->files_cnt + 1)))
 			== NULL)
-		return error_set_print(PACKAGE, 1, "%s", strerror(errno));
+		return error_set_print(PROGNAME, 1, "%s", strerror(errno));
 	c->files = p;
 	p = &c->files[c->files_cnt++];
 	p->fd = fd;
@@ -589,7 +593,7 @@ static int _client_remove_file(AppServerClient * client, int32_t fd)
 	VFSFile * p;
 
 	if(fd < 0) /* XXX should never happen */
-		return error_set_print(PACKAGE, 1, "%s", strerror(EINVAL));
+		return error_set_print(PROGNAME, 1, "%s", strerror(EINVAL));
 	if((c = _client_get(client)) == NULL)
 		return 1;
 	for(i = 0; i < c->files_cnt; i++)
