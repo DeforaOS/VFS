@@ -27,7 +27,10 @@
 /* usage */
 static int _usage(void)
 {
-	fputs("Usage: " PACKAGE " [-R][-r root][-u umask]\n", stderr);
+	fputs("Usage: " PACKAGE " [-R][-r root][-u umask]\n"
+"  -R	Register the service with the Session\n"
+"  -r	Alternate directory to serve access from (default: /)\n"
+"  -u	Mask to apply while creating files and directories\n", stderr);
 	return 1;
 }
 
