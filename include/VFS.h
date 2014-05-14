@@ -89,29 +89,29 @@ typedef String ** STRING_INOUT;
 
 
 /* calls */
-INT32 VFS_access(App * app, AppServerClient * client, STRING pathname, UINT32 mode);
-INT32 VFS_chmod(App * app, AppServerClient * client, STRING pathname, UINT32 mode);
-INT32 VFS_chown(App * app, AppServerClient * client, STRING pathname, UINT32 owner, UINT32 group);
+INT32 VFS_access(App * app, AppServerClient * client, STRING filename, UINT32 mode);
+INT32 VFS_chmod(App * app, AppServerClient * client, STRING filename, UINT32 mode);
+INT32 VFS_chown(App * app, AppServerClient * client, STRING filename, UINT32 owner, UINT32 group);
 INT32 VFS_close(App * app, AppServerClient * client, INT32 fd);
 INT32 VFS_closedir(App * app, AppServerClient * client, INT32 dir);
 INT32 VFS_dirfd(App * app, AppServerClient * client, INT32 dir);
 INT32 VFS_fchmod(App * app, AppServerClient * client, INT32 fd, UINT32 mode);
 INT32 VFS_fchown(App * app, AppServerClient * client, INT32 fd, UINT32 owner, UINT32 group);
 INT32 VFS_flock(App * app, AppServerClient * client, INT32 fd, UINT32 operation);
-INT32 VFS_lchown(App * app, AppServerClient * client, STRING pathname, UINT32 owner, UINT32 group);
+INT32 VFS_lchown(App * app, AppServerClient * client, STRING filename, UINT32 owner, UINT32 group);
 INT32 VFS_link(App * app, AppServerClient * client, STRING name1, STRING name2);
 INT32 VFS_lseek(App * app, AppServerClient * client, INT32 fd, INT32 offset, INT32 whence);
-INT32 VFS_mkdir(App * app, AppServerClient * client, STRING pathname, UINT32 mode);
-INT32 VFS_open(App * app, AppServerClient * client, STRING pathname, UINT32 flags, UINT32 mode);
-INT32 VFS_opendir(App * app, AppServerClient * client, STRING pathname);
+INT32 VFS_mkdir(App * app, AppServerClient * client, STRING filename, UINT32 mode);
+INT32 VFS_open(App * app, AppServerClient * client, STRING filename, UINT32 flags, UINT32 mode);
+INT32 VFS_opendir(App * app, AppServerClient * client, STRING filename);
 INT32 VFS_read(App * app, AppServerClient * client, INT32 fd, BUFFER_OUT buf, UINT32 size);
 INT32 VFS_readdir(App * app, AppServerClient * client, INT32 dir, STRING_OUT de);
 INT32 VFS_rename(App * app, AppServerClient * client, STRING from, STRING to);
 INT32 VFS_rewinddir(App * app, AppServerClient * client, INT32 dir);
-INT32 VFS_rmdir(App * app, AppServerClient * client, STRING pathname);
+INT32 VFS_rmdir(App * app, AppServerClient * client, STRING filename);
 INT32 VFS_symlink(App * app, AppServerClient * client, STRING name1, STRING name2);
 UINT32 VFS_umask(App * app, AppServerClient * client, UINT32 mode);
-INT32 VFS_unlink(App * app, AppServerClient * client, STRING pathname);
+INT32 VFS_unlink(App * app, AppServerClient * client, STRING filename);
 INT32 VFS_write(App * app, AppServerClient * client, INT32 fd, BUFFER buffer, UINT32 size);
 
 #endif /* !VFS_VFS_H */

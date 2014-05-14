@@ -54,17 +54,17 @@ O_SYNC=0x1000
 
 [call::access]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,mode
 
 [call::chmod]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,mode
 
 [call::chown]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,owner
 arg3=UINT32,group
 
@@ -98,7 +98,7 @@ arg2=UINT32,operation
 
 [call::lchown]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,owner
 arg3=UINT32,group
 
@@ -115,18 +115,18 @@ arg3=INT32,whence
 
 [call::mkdir]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,mode
 
 [call::open]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 arg2=UINT32,flags
 arg3=UINT32,mode
 
 [call::opendir]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 
 [call::read]
 ret=INT32
@@ -150,7 +150,7 @@ arg1=INT32,dir
 
 [call::rmdir]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 
 [call::symlink]
 ret=INT32
@@ -163,7 +163,7 @@ arg1=UINT32,mode
 
 [call::unlink]
 ret=INT32
-arg1=STRING,pathname
+arg1=STRING,filename
 
 [call::write]
 ret=INT32

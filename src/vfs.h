@@ -19,11 +19,12 @@
 # define VFS_SRC_VFS_H
 
 # include <sys/stat.h>
+# include <System/string.h>
 # include <System/App.h>
 
 
 /* VFS */
 int vfs(AppServerOptions options, char const * name, mode_t mask,
-		char const * root);
+		String const * root);
 
 #endif /* !VFS_SRC_VFS_H */

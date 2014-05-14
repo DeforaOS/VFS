@@ -13,7 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 /* TODO:
- * - implement root
  * - implement read-only mode
  * - unify whence values */
 
@@ -61,23 +60,25 @@ typedef struct _App
 	AppServer * appserver;
 	VFSClient * clients;
 	size_t clients_cnt;
+
+	String * root;
 } VFS;
 
 
 /* macros */
-#if 1
-# define VFS_STUB1(type, name, type1, arg1) \
+#define VFS_STUB1(type, name, type1, arg1) \
 	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1) \
 { \
+	String * path; \
 	int res; \
-	if((res = name(arg1)) != 0) \
+	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
+		return -VFS_EPROTO; \
+	res = name(path); \
+	string_delete(path); \
+	if(res != 0) \
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0); \
-	return res; \
+	return 0; \
 }
-#else /* FIXME check if the following approach works too */
-# define VFS_STUB1(type, name, type1, arg1) \
-	type (*VFS_ ## name)(type1 arg1) = name;
-#endif
 
 #define VFS_STUB2(type, name, type1, arg1, type2, arg2) \
 	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2) \
@@ -92,12 +93,22 @@ typedef struct _App
 	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2, \
 			type3 arg3) \
 { \
-	return name(arg1, arg2, arg3); \
+	String * path; \
+	int res; \
+	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
+		return -VFS_EPROTO; \
+	res = name(path, arg2, arg3); \
+	string_delete(path); \
+	if(res != 0) \
+		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0); \
+	return 0; \
 }
 
 
 /* prototypes */
 /* accessors */
+static String * _vfs_get_realpath(VFS * vfs, String const * filename);
+
 static VFSClient * _client_get(VFS * vfs, AppServerClient * client);
 static mode_t _client_get_umask(VFS * vfs, AppServerClient * client);
 static int _client_set_umask(VFS * vfs, AppServerClient * client, mode_t mask);
@@ -116,8 +127,7 @@ static int _client_remove_file(VFS * vfs, AppServerClient * client, int32_t fd);
 /* functions */
 /* vfs */
 int vfs(AppServerOptions options, char const * name, mode_t mask,
-		char const * root)
-	/* FIXME implement root */
+		String const * root)
 {
 	VFS vfs;
 
@@ -129,37 +139,49 @@ int vfs(AppServerOptions options, char const * name, mode_t mask,
 	umask(mask);
 	vfs.clients = NULL;
 	vfs.clients_cnt = 0;
+	if((vfs.root = string_new(root)) == NULL)
+	{
+		appserver_delete(vfs.appserver);
+		error_print(PROGNAME);
+		return 1;
+	}
 	appserver_loop(vfs.appserver);
 	free(vfs.clients);
+	string_delete(vfs.root);
 	appserver_delete(vfs.appserver);
 	return 0;
 }
 
 
 /* stubs */
-VFS_STUB2(int32_t, chmod, String const *, path, uint32_t, mode)
-VFS_STUB3(int32_t, chown, String const *, path, uint32_t, owner, uint32_t,
+VFS_STUB2(int32_t, chmod, String const *, filename, uint32_t, mode)
+VFS_STUB3(int32_t, chown, String const *, filename, uint32_t, owner, uint32_t,
 		group)
-VFS_STUB3(int32_t, lchown, String const *, path, uint32_t, owner, uint32_t,
+VFS_STUB3(int32_t, lchown, String const *, filename, uint32_t, owner, uint32_t,
 		group)
 VFS_STUB2(int32_t, link, String const *, name1, String const *, name2)
 VFS_STUB2(int32_t, rename, String const *, from, String const *, to)
-VFS_STUB1(int32_t, rmdir, String const *, path)
+VFS_STUB1(int32_t, rmdir, String const *, filename)
 VFS_STUB2(int32_t, symlink, String const *, name1, String const *, name2)
-VFS_STUB1(int32_t, unlink, String const *, path)
+VFS_STUB1(int32_t, unlink, String const *, filename)
 
 
 /* interface */
 /* VFS_access */
-int32_t VFS_access(VFS * vfs, AppServerClient * client, String const * path,
+int32_t VFS_access(VFS * vfs, AppServerClient * client, String const * filename,
 		uint32_t mode)
 {
 	int vfsmode;
+	String * path;
+	int res;
 
 	if((vfsmode = _vfs_flags(_vfs_flags_access, _vfs_flags_access_cnt,
-					mode, 0)) < 0)
+					mode, 0)) < 0
+			|| (path = _vfs_get_realpath(vfs, filename)) == NULL)
 		return -VFS_EPROTO;
-	if(access(path, vfsmode) != 0)
+	res = access(path, vfsmode);
+	string_delete(path);
+	if(res != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
 }
@@ -273,13 +295,19 @@ int32_t VFS_lseek(VFS * vfs, AppServerClient * client, int32_t fd,
 
 
 /* VFS_mkdir */
-int32_t VFS_mkdir(VFS * vfs, AppServerClient * client, String const * path,
+int32_t VFS_mkdir(VFS * vfs, AppServerClient * client, String const * filename,
 		uint32_t mode)
 {
+	String * path;
 	mode_t mask;
+	int res;
 
+	if((path = _vfs_get_realpath(vfs, filename)) == NULL)
+		return -VFS_EPROTO;
 	mask = _client_get_umask(vfs, client);
-	if(mkdir(path, mode & mask) != 0)
+	res = mkdir(path, mode & mask);
+	string_delete(path);
+	if(res != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
 }
@@ -290,18 +318,21 @@ int32_t VFS_open(VFS * vfs, AppServerClient * client, String const * filename,
 		uint32_t flags, uint32_t mode)
 {
 	int vfsflags;
+	String * path;
 	int mask;
 	int fd;
 
 	if((vfsflags = _vfs_flags(_vfs_flags_open, _vfs_flags_open_cnt, flags,
-					0)) < 0)
-		return -1;
+					0)) < 0
+			|| (path = _vfs_get_realpath(vfs, filename)) == NULL)
+		return -VFS_EPROTO;
 	mask = _client_get_umask(vfs, client);
-	fd = open(filename, vfsflags, mode & mask);
+	fd = open(path, vfsflags, mode & mask);
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: %s(\"%s\", %u, %u) => %d\n", __func__, filename,
+	fprintf(stderr, "DEBUG: %s(\"%s\", %u, %u) => %d\n", __func__, pathname,
 			flags, mode, fd);
 #endif
+	string_delete(path);
 	if(fd < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	if(_client_add_file(vfs, client, fd, NULL) != 0)
@@ -317,27 +348,33 @@ int32_t VFS_open(VFS * vfs, AppServerClient * client, String const * filename,
 int32_t VFS_opendir(VFS * vfs, AppServerClient * client,
 		String const * filename)
 {
+	String * path;
 	DIR * dir;
 	int fd;
 
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(\"%s\")\n", __func__, filename);
 #endif
+	if((path = _vfs_get_realpath(vfs, filename)) == NULL)
+		return -VFS_EPROTO;
 #if defined(__sun__)
-	if((fd = open(filename, O_RDONLY)) < 0 || (dir = fdopendir(fd)) == NULL)
+	if((fd = open(path, O_RDONLY)) < 0 || (dir = fdopendir(fd)) == NULL)
 	{
+		string_delete(path);
 		if(fd >= 0)
 			close(fd);
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	}
 #else
-	if((dir = opendir(filename)) == NULL || (fd = dirfd(dir)) < 0)
+	if((dir = opendir(path)) == NULL || (fd = dirfd(dir)) < 0)
 	{
+		string_delete(path);
 		if(dir != NULL)
 			closedir(dir);
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	}
 #endif
+	string_delete(path);
 	if(_client_add_file(vfs, client, fd, dir) != 0)
 	{
 		closedir(dir);
@@ -446,6 +483,58 @@ int32_t VFS_write(VFS * vfs, AppServerClient * client, int32_t fd, Buffer * b,
 /* private */
 /* functions */
 /* accessors */
+/* vfs_get_realpath */
+static String * _vfs_get_realpath(VFS * vfs, String const * filename)
+{
+	/* FIXME write tests */
+	String * f;
+	String * path;
+	size_t i;
+	size_t j;
+	int c;
+
+	if((path = string_new("")) == NULL)
+		return NULL;
+	if((f = string_new(filename)) == NULL)
+	{
+		string_delete(path);
+		return NULL;
+	}
+	for(i = 0; f[i] != '\0'; i++)
+	{
+		/* skip delimiters */
+		for(; f[i] != '/' && f[i] != '\0'; i++);
+		/* look for the next delimiter */
+		for(j = i; f[j] != '/' && f[j] != '\0'; j++);
+		c = f[j];
+		f[j] = '\0';
+		if(string_compare(&f[i], ".") == 0)
+			continue;
+		else if(string_compare(&f[i], "..") == 0)
+		{
+			/* look for the previous delimiter */
+			for(j = 0; f[j] != '\0'; j++);
+			for(; j > 0 && f[--j] != '/';);
+			f[j] = '\0';
+		}
+		else if(string_append(&path, "/") != 0
+				|| string_append(&path, &f[i]) != 0)
+		{
+			string_delete(path);
+			string_delete(f);
+			return NULL;
+		}
+		else if(c == '\0')
+			break;
+	}
+	string_delete(f);
+	/* return an absolute path */
+	f = string_new_append(vfs->root, path, NULL);
+	string_delete(path);
+	return f;
+}
+
+
 /* client_get */
 static VFSClient * _client_get(VFS * vfs, AppServerClient * client)
 {
