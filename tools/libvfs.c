@@ -82,10 +82,16 @@ static ssize_t (*old_write)(int fd, void const * buf, size_t count);
 
 
 /* prototypes */
+/* essential */
 static void _libvfs_init(void);
+
+/* accessors */
+static char const * _libvfs_get_remote_path(char const * path);
+static unsigned int _libvfs_is_remote(char const * path);
 
 
 /* functions */
+/* libvfs_init */
 static void _libvfs_init(void)
 {
 	static void * hdl = NULL;
@@ -161,6 +167,30 @@ static void _libvfs_init(void)
 }
 
 
+/* libvfs_get_remote */
+static char const * _libvfs_get_remote_path(char const * path)
+{
+	char const file[] = "file://";
+
+	if(path == NULL)
+		return NULL;
+	if(strncmp(file, path, sizeof(file) - 1) != 0)
+		return NULL;
+#ifdef DEBUG
+	fprintf(stderr, "DEBUG: %s(\"%s\") => \"%s\"\n", __func__, path,
+			strchr(&path[sizeof(file) - 1], '/'));
+#endif
+	return strchr(&path[sizeof(file) - 1], '/');
+}
+
+
+/* libvfs_is_remote */
+static unsigned int _libvfs_is_remote(char const * path)
+{
+	return (_libvfs_get_remote_path(path) != NULL) ? 1 : 0;
+}
+
+
 /* public */
 /* interface */
 /* access */
@@ -169,8 +199,10 @@ int access(const char * path, int mode)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_access(path, mode);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if((mode = _vfs_flags(_vfs_flags_access, _vfs_flags_access_cnt, mode,
 					1)) < 0)
 	{
@@ -192,8 +224,10 @@ int chmod(char const * path, mode_t mode)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_chmod(path, mode);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "chmod", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
@@ -211,8 +245,10 @@ int chown(char const * path, uid_t uid, gid_t gid)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_chown(path, uid, gid);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "chown", path, uid, gid)
 			!= 0)
 		return -1;
@@ -313,6 +349,7 @@ int fstat(int fd, struct stat * st)
 	_libvfs_init();
 	if(fd < VFS_OFFSET)
 		return old_fstat(fd, st);
+	/* FIXME implement */
 	errno = ENOSYS;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: fstat(%d) => %d\n", fd - VFS_OFFSET, ret);
@@ -329,8 +366,10 @@ int lchown(char const * path, uid_t uid, gid_t gid)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_lchown(path, uid, gid);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "lchown", path, uid, gid)
 			!= 0)
 		return -1;
@@ -377,8 +416,11 @@ int lstat(char const * path, struct stat * st)
 	int ret = -1;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_lstat(path, st);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	/* FIXME implement */
 	errno = ENOSYS;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: lstat(\"%s\") => %d\n", path, ret);
@@ -395,8 +437,10 @@ int mkdir(char const * path, mode_t mode)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_mkdir(path, mode);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "mkdir", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
@@ -435,8 +479,10 @@ int open(const char * path, int flags, ...)
 		mode = va_arg(ap, int);
 		va_end(ap);
 	}
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_open(path, flags, mode);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if((vfsflags = _vfs_flags(_vfs_flags_open, _vfs_flags_open_cnt,
 					flags, 1)) < 0)
 	{
@@ -465,11 +511,13 @@ DIR * opendir(char const * path)
 	_libvfs_init();
 	if((dir = malloc(sizeof(*dir))) == NULL)
 		return NULL;
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 	{
 		dir->dir = old_opendir(path);
 		dir->fd = -1;
 	}
+	else if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	else
 	{
 		dir->dir = NULL;
@@ -484,15 +532,18 @@ DIR * opendir(char const * path)
 				(void *)dir, dir->fd);
 # endif
 	}
-	return (DIR*)dir;
+	return (DIR *)dir;
 #else
 	DIR * dir;
 	int fd;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_opendir(path);
-	if((dir = old_opendir("/")) == NULL) /* XXX quite ugly */
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return NULL;
+	/* XXX find a better way */
+	if((dir = old_opendir("/")) == NULL)
 		return NULL;
 	if(appclient_call(_appclient, (void **)&fd, "opendir", path) != 0
 			|| fd < 0)
@@ -595,15 +646,18 @@ int rename(char const * from, char const * to)
 	int t;
 
 	_libvfs_init();
-	f = strncmp(_vfs_root, from, VFS_ROOT_SIZE);
-	t = strncmp(_vfs_root, to, VFS_ROOT_SIZE);
-	if(f != 0 && t != 0)
+	f = _libvfs_is_remote(from);
+	t = _libvfs_is_remote(to);
+	if(f == 0 && t == 0)
 		return old_rename(from, to);
-	if((f == 0 && t != 0) || (f != 0 && t == 0))
+	if(f != t)
 	{
 		errno = EXDEV;
 		return -1;
 	}
+	if((from = _libvfs_get_remote_path(from)) == NULL
+			|| (to = _libvfs_get_remote_path(to)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "rename", from, to) != 0)
 		return -1;
 #ifdef DEBUG
@@ -650,8 +704,10 @@ int rmdir(char const * path)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_rmdir(path);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "rmdir", path) != 0)
 		return -1;
 #ifdef DEBUG
@@ -669,8 +725,11 @@ int stat(char const * path, struct stat * st)
 	int ret = -1;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_stat(path, st);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	/* FIXME implement */
 	errno = ENOSYS;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: stat(\"%s\") => %d\n", path, ret);
@@ -687,8 +746,10 @@ int symlink(char const * name1, char const * name2)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, name2, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(name2) == 0)
 		return old_symlink(name1, name2);
+	if((name2 = _libvfs_get_remote_path(name2)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "symlink", name1, name2)
 			!= 0)
 		return -1;
@@ -724,8 +785,10 @@ int unlink(char const * path)
 	int ret;
 
 	_libvfs_init();
-	if(strncmp(_vfs_root, path, VFS_ROOT_SIZE) != 0)
+	if(_libvfs_is_remote(path) == 0)
 		return old_unlink(path);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "unlink", path) != 0)
 		return -1;
 #ifdef DEBUG
