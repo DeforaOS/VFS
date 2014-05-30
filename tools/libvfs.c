@@ -687,6 +687,7 @@ int rename(char const * from, char const * to)
 	t = _libvfs_is_remote(to);
 	if(f == 0 && t == 0)
 		return old_rename(from, to);
+	/* FIXME also compare the remote hosts */
 	if(f != t)
 	{
 		errno = EXDEV;
