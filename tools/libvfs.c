@@ -15,6 +15,7 @@
 
 
 
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -42,10 +43,8 @@ typedef struct _VFSDIR
 
 /* constants */
 #define PROGNAME	"libVFS"
-#define VFS_OFFSET	1024
 
-static char const _vfs_root[] = "Videos/";
-#define VFS_ROOT_SIZE (sizeof(_vfs_root) - 1)
+static int _vfs_offset = 1024;
 
 
 /* variables */
@@ -97,6 +96,7 @@ static void _libvfs_init(void)
 	static void * hdl = NULL;
 	static char libc[] = "/lib/libc.so";
 	static char libc6[] = "/lib/libc.so.6";
+	struct rlimit r;
 
 	if(hdl != NULL)
 		return;
@@ -164,6 +164,10 @@ static void _libvfs_init(void)
 		error_print(PROGNAME);
 		exit(1);
 	}
+#ifdef RLIMIT_NOFILE
+	if(getrlimit(RLIMIT_NOFILE, &r) == 0 && r.rlim_max > _vfs_offset)
+		_vfs_offset = r.rlim_max;
+#endif
 }
 
 
@@ -268,13 +272,13 @@ int close(int fd)
 	int ret;
 
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_close(fd);
-	if(appclient_call(_appclient, (void **)&ret, "close", fd - VFS_OFFSET)
+	if(appclient_call(_appclient, (void **)&ret, "close", fd - _vfs_offset)
 			!= 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: close(%d) => %d\n", fd - VFS_OFFSET, ret);
+	fprintf(stderr, "DEBUG: close(%d) => %d\n", fd - _vfs_offset, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -297,7 +301,7 @@ int closedir(DIR * dir)
 	if(d->dir != NULL)
 		ret = old_closedir(d->dir);
 #else
-	fd = dirfd(dir) - VFS_OFFSET;
+	fd = dirfd(dir) - _vfs_offset;
 	if(fd < 0)
 		return old_closedir(dir);
 #endif
@@ -336,7 +340,7 @@ int dirfd(DIR * dir)
 # endif
 	if(ret < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
-	return ret + VFS_OFFSET;
+	return ret + _vfs_offset;
 }
 #endif
 
@@ -347,12 +351,12 @@ int fstat(int fd, struct stat * st)
 	int ret = -1;
 
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_fstat(fd, st);
 	/* FIXME implement */
 	errno = ENOSYS;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: fstat(%d) => %d\n", fd - VFS_OFFSET, ret);
+	fprintf(stderr, "DEBUG: fstat(%d) => %d\n", fd - _vfs_offset, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -389,7 +393,7 @@ off_t lseek(int fd, off_t offset, int whence)
 	int ret;
 
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_lseek(fd, offset, whence);
 	if((whence = _vfs_flags(_vfs_flags_lseek, _vfs_flags_lseek_cnt, whence,
 					1)) < 0)
@@ -397,11 +401,11 @@ off_t lseek(int fd, off_t offset, int whence)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, (void **)&ret, "lseek", fd - VFS_OFFSET,
+	if(appclient_call(_appclient, (void **)&ret, "lseek", fd - _vfs_offset,
 				offset, whence) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: lseek(%d, %ld, %d) => %d\n", fd - VFS_OFFSET,
+	fprintf(stderr, "DEBUG: lseek(%d, %ld, %d) => %d\n", fd - _vfs_offset,
 			offset, whence, ret);
 #endif
 	if(ret < 0)
@@ -457,7 +461,7 @@ void * mmap(void * addr, size_t len, int prot, int flags, int fd,
 		off_t offset)
 {
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_mmap(addr, len, prot, flags, fd, offset);
 	errno = ENODEV;
 	return MAP_FAILED;
@@ -498,7 +502,7 @@ int open(const char * path, int flags, ...)
 #endif
 	if(ret < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
-	return ret + VFS_OFFSET;
+	return ret + _vfs_offset;
 }
 
 
@@ -555,7 +559,7 @@ DIR * opendir(char const * path)
 	fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", path,
 			(void *)dir, fd);
 # endif
-	dirfd(dir) = fd + VFS_OFFSET;
+	dirfd(dir) = fd + _vfs_offset;
 	return dir;
 #endif
 }
@@ -568,9 +572,9 @@ ssize_t read(int fd, void * buf, size_t count)
 	Buffer * b;
 
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_read(fd, buf, count);
-	fd -= VFS_OFFSET;
+	fd -= _vfs_offset;
 	if((b = buffer_new(0, NULL)) == NULL)
 		return -1;
 	if(appclient_call(_appclient, (void **)&ret, "read", fd, b, count) != 0)
@@ -608,9 +612,9 @@ struct dirent * readdir(DIR * dir)
 		return old_readdir(d->dir);
 	fd = d->fd;
 #else
-	if(dirfd(dir) < VFS_OFFSET)
+	if(dirfd(dir) < _vfs_offset)
 		return old_readdir(dir);
-	fd = dirfd(dir) - VFS_OFFSET;
+	fd = dirfd(dir) - _vfs_offset;
 #endif
 	if(appclient_call(_appclient, (void **)&res, "readdir", fd, &filename)
 			!= 0)
@@ -683,7 +687,7 @@ void rewinddir(DIR * dir)
 	if(d->dir != NULL)
 		old_rewinddir(d->dir);
 #else
-	fd = dirfd(dir) - VFS_OFFSET;
+	fd = dirfd(dir) - _vfs_offset;
 	if(fd < 0)
 		old_rewinddir(dir);
 #endif
@@ -807,11 +811,11 @@ ssize_t write(int fd, void const * buf, size_t count)
 	Buffer * b;
 
 	_libvfs_init();
-	if(fd < VFS_OFFSET)
+	if(fd < _vfs_offset)
 		return old_write(fd, buf, count);
 	if((b = buffer_new(count, buf)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "write", fd - VFS_OFFSET,
+	if(appclient_call(_appclient, (void **)&ret, "write", fd - _vfs_offset,
 				b, count)
 			!= 0)
 	{
@@ -819,7 +823,7 @@ ssize_t write(int fd, void const * buf, size_t count)
 		return -1;
 	}
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: write(%d, buf, %lu) => %d\n", fd - VFS_OFFSET,
+	fprintf(stderr, "DEBUG: write(%d, buf, %lu) => %d\n", fd - _vfs_offset,
 			count, ret);
 #endif
 	buffer_delete(b);
