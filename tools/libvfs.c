@@ -579,7 +579,7 @@ DIR * opendir(char const * path)
 		return old_opendir(path);
 	if((path = _libvfs_get_remote_path(path)) == NULL)
 		return NULL;
-	/* XXX find a better way */
+	/* XXX find a better way to allocate a DIR structure */
 	if((dir = old_opendir("/")) == NULL)
 		return NULL;
 	if(appclient_call(_appclient, (void **)&fd, "opendir", path) != 0
