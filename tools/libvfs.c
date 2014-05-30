@@ -29,6 +29,8 @@
 #include <System.h>
 #include <System/App.h>
 #include "../src/common.c"
+/* TODO:
+ * - use _libvfs_get_remote_host() */
 
 
 /* libVFS */
@@ -85,6 +87,7 @@ static ssize_t (*old_write)(int fd, void const * buf, size_t count);
 static void _libvfs_init(void);
 
 /* accessors */
+static String * _libvfs_get_remote_host(char const * path);
 static char const * _libvfs_get_remote_path(char const * path);
 static unsigned int _libvfs_is_remote(char const * path);
 
@@ -174,7 +177,34 @@ static void _libvfs_init(void)
 }
 
 
-/* libvfs_get_remote */
+/* libvfs_get_remote_host */
+static String * _libvfs_get_remote_host(char const * path)
+{
+	char const file[] = "file://";
+	String * ret;
+	String * p;
+
+	if(path == NULL)
+		return NULL;
+	if(strncmp(file, path, sizeof(file) - 1) != 0)
+		return NULL;
+	path += sizeof(file) - 1;
+	if((ret = string_new(path)) == NULL)
+		return NULL;
+	if((p = string_find(ret, "/")) == NULL)
+	{
+		string_delete(ret);
+		return NULL;
+	}
+	*p = '\0';
+#ifdef DEBUG
+	fprintf(stderr, "DEBUG: %s(\"%s\") => \"%s\"\n", __func__, path, ret);
+#endif
+	return ret;
+}
+
+
+/* libvfs_get_remote_path */
 static char const * _libvfs_get_remote_path(char const * path)
 {
 	char const file[] = "file://";
