@@ -150,6 +150,9 @@ static void _libvfs_init(void)
 			exit(1);
 		}
 	dlclose(hdl);
+#ifdef DEBUG
+	fprintf(stderr, "DEBUG: %s()\n", __func__);
+#endif
 	if((_appclient = appclient_new(NULL, "VFS", NULL)) == NULL)
 	{
 		error_print(PROGNAME);
