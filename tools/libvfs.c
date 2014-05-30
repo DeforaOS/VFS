@@ -167,6 +167,9 @@ static void _libvfs_init(void)
 #ifdef RLIMIT_NOFILE
 	if(getrlimit(RLIMIT_NOFILE, &r) == 0 && r.rlim_max > _vfs_offset)
 		_vfs_offset = r.rlim_max;
+# ifdef DEBUG
+	fprintf(stderr, "DEBUG: %s() %u\n", __func__, _vfs_offset);
+# endif
 #endif
 }
 
