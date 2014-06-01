@@ -46,11 +46,11 @@ typedef struct _VFSDIR
 /* constants */
 #define PROGNAME	"libVFS"
 
-static int _vfs_offset = 1024;
-
 
 /* variables */
 static AppClient * _appclient = NULL;
+
+static int _vfs_offset = 1024;
 
 /* local functions */
 static int (*old_access)(char const * path, int mode);
@@ -99,7 +99,9 @@ static void _libvfs_init(void)
 	static void * hdl = NULL;
 	static char libc[] = "/lib/libc.so";
 	static char libc6[] = "/lib/libc.so.6";
+#ifdef RLIMIT_NOFILE
 	struct rlimit r;
+#endif
 
 	if(hdl != NULL)
 		return;
