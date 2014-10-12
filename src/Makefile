@@ -36,6 +36,7 @@ main.o: main.c
 
 clean:
 	$(RM) -- $(../include/VFS.h_OBJS) $(VFS_OBJS)
+	../data/appbroker.sh -c -P "$(PREFIX)" -- "../include/VFS.h"
 
 distclean: clean
 	$(RM) -- $(TARGETS)
