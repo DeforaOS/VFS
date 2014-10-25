@@ -357,7 +357,7 @@ int32_t VFS_opendir(VFS * vfs, AppServerClient * client,
 #endif
 	if((path = _vfs_get_realpath(vfs, filename)) == NULL)
 		return -VFS_EPROTO;
-#if defined(__sun__)
+#if defined(__sun)
 	if((fd = open(path, O_RDONLY)) < 0 || (dir = fdopendir(fd)) == NULL)
 	{
 		string_delete(path);
