@@ -1,4 +1,4 @@
-TARGETS	= $(OBJDIR)../include/VFS.h $(OBJDIR)VFS
+TARGETS	= $(OBJDIR)../include/VFS.h $(OBJDIR)VFS$(EXEEXT)
 OBJDIR	=
 PREFIX	= /usr/local
 DESTDIR	=
@@ -11,6 +11,7 @@ CFLAGSF	= -W `pkg-config --cflags libApp`
 CFLAGS	= -Wall -g -O2 -pedantic
 LDFLAGSF= `pkg-config --libs libApp` -Wl,--export-dynamic
 LDFLAGS	= 
+EXEEXT	=
 RM	= rm -f
 LN	= ln -f
 MKDIR	= mkdir -m 0755 -p
@@ -26,8 +27,8 @@ VFS_OBJS = $(OBJDIR)vfs.o $(OBJDIR)main.o
 VFS_CFLAGS = $(CPPFLAGSF) $(CPPFLAGS) $(CFLAGSF) $(CFLAGS)
 VFS_LDFLAGS = $(LDFLAGSF) $(LDFLAGS)
 
-$(OBJDIR)VFS: $(VFS_OBJS)
-	$(CC) -o $(OBJDIR)VFS $(VFS_OBJS) $(VFS_LDFLAGS)
+$(OBJDIR)VFS$(EXEEXT): $(VFS_OBJS)
+	$(CC) -o $(OBJDIR)VFS$(EXEEXT) $(VFS_OBJS) $(VFS_LDFLAGS)
 
 $(OBJDIR)vfs.o: vfs.c common.c ../include/VFS.h ../config.h
 	$(CC) $(VFS_CFLAGS) -o $(OBJDIR)vfs.o -c vfs.c
@@ -44,9 +45,9 @@ distclean: clean
 
 install: $(TARGETS)
 	$(MKDIR) $(DESTDIR)$(BINDIR)
-	$(INSTALL) -m 0755 $(OBJDIR)VFS $(DESTDIR)$(BINDIR)/VFS
+	$(INSTALL) -m 0755 $(OBJDIR)VFS$(EXEEXT) $(DESTDIR)$(BINDIR)/VFS$(EXEEXT)
 
 uninstall:
-	$(RM) -- $(DESTDIR)$(BINDIR)/VFS
+	$(RM) -- $(DESTDIR)$(BINDIR)/VFS$(EXEEXT)
 
 .PHONY: all clean distclean install uninstall
