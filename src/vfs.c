@@ -466,8 +466,8 @@ uint32_t VFS_umask(VFS * vfs, AppServerClient * client, uint32_t mask)
 
 
 /* VFS_write */
-int32_t VFS_write(VFS * vfs, AppServerClient * client, int32_t fd, Buffer * b,
-		uint32_t size)
+int32_t VFS_write(VFS * vfs, AppServerClient * client, int32_t fd,
+		Buffer const * b, uint32_t size)
 {
 	if(!_vfs_check(vfs, client, fd))
 		return -VFS_EPROTO;
