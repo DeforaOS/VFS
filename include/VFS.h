@@ -5,39 +5,10 @@
 #ifndef VFS_VFS_H
 # define VFS_VFS_H
 
+# include <stdbool.h>
 # include <stdint.h>
 # include <System/App.h>
 
-
-/* types */
-typedef Buffer * BUFFER;
-typedef double * DOUBLE;
-typedef float * FLOAT;
-typedef int16_t INT16;
-typedef int32_t INT32;
-typedef uint16_t UINT16;
-typedef uint32_t UINT32;
-typedef String const * STRING;
-typedef void VOID;
-
-typedef BUFFER BUFFER_IN;
-
-typedef DOUBLE DOUBLE_IN;
-
-typedef FLOAT FLOAT_IN;
-typedef INT32 INT32_IN;
-typedef UINT32 UINT32_IN;
-typedef STRING STRING_IN;
-
-typedef Buffer * BUFFER_OUT;
-typedef int32_t * INT32_OUT;
-typedef uint32_t * UINT32_OUT;
-typedef String ** STRING_OUT;
-
-typedef Buffer * BUFFER_INOUT;
-typedef int32_t * INT32_INOUT;
-typedef uint32_t * UINT32_INOUT;
-typedef String ** STRING_INOUT;
 
 
 /* constants */
@@ -87,31 +58,30 @@ typedef String ** STRING_INOUT;
 # define VFS_O_RSYNC	0x800
 # define VFS_O_SYNC	0x1000
 
-
 /* calls */
-INT32 VFS_access(App * app, AppServerClient * client, STRING filename, UINT32 mode);
-INT32 VFS_chmod(App * app, AppServerClient * client, STRING filename, UINT32 mode);
-INT32 VFS_chown(App * app, AppServerClient * client, STRING filename, UINT32 owner, UINT32 group);
-INT32 VFS_close(App * app, AppServerClient * client, INT32 fd);
-INT32 VFS_closedir(App * app, AppServerClient * client, INT32 dir);
-INT32 VFS_dirfd(App * app, AppServerClient * client, INT32 dir);
-INT32 VFS_fchmod(App * app, AppServerClient * client, INT32 fd, UINT32 mode);
-INT32 VFS_fchown(App * app, AppServerClient * client, INT32 fd, UINT32 owner, UINT32 group);
-INT32 VFS_flock(App * app, AppServerClient * client, INT32 fd, UINT32 operation);
-INT32 VFS_lchown(App * app, AppServerClient * client, STRING filename, UINT32 owner, UINT32 group);
-INT32 VFS_link(App * app, AppServerClient * client, STRING name1, STRING name2);
-INT32 VFS_lseek(App * app, AppServerClient * client, INT32 fd, INT32 offset, INT32 whence);
-INT32 VFS_mkdir(App * app, AppServerClient * client, STRING filename, UINT32 mode);
-INT32 VFS_open(App * app, AppServerClient * client, STRING filename, UINT32 flags, UINT32 mode);
-INT32 VFS_opendir(App * app, AppServerClient * client, STRING filename);
-INT32 VFS_read(App * app, AppServerClient * client, INT32 fd, BUFFER_OUT buf, UINT32 size);
-INT32 VFS_readdir(App * app, AppServerClient * client, INT32 dir, STRING_OUT de);
-INT32 VFS_rename(App * app, AppServerClient * client, STRING from, STRING to);
-INT32 VFS_rewinddir(App * app, AppServerClient * client, INT32 dir);
-INT32 VFS_rmdir(App * app, AppServerClient * client, STRING filename);
-INT32 VFS_symlink(App * app, AppServerClient * client, STRING name1, STRING name2);
-UINT32 VFS_umask(App * app, AppServerClient * client, UINT32 mode);
-INT32 VFS_unlink(App * app, AppServerClient * client, STRING filename);
-INT32 VFS_write(App * app, AppServerClient * client, INT32 fd, BUFFER buffer, UINT32 size);
+int32_t VFS_access(App * app, AppServerClient * client, String const * filename, uint32_t mode);
+int32_t VFS_chmod(App * app, AppServerClient * client, String const * filename, uint32_t mode);
+int32_t VFS_chown(App * app, AppServerClient * client, String const * filename, uint32_t owner, uint32_t group);
+int32_t VFS_close(App * app, AppServerClient * client, int32_t fd);
+int32_t VFS_closedir(App * app, AppServerClient * client, int32_t dir);
+int32_t VFS_dirfd(App * app, AppServerClient * client, int32_t dir);
+int32_t VFS_fchmod(App * app, AppServerClient * client, int32_t fd, uint32_t mode);
+int32_t VFS_fchown(App * app, AppServerClient * client, int32_t fd, uint32_t owner, uint32_t group);
+int32_t VFS_flock(App * app, AppServerClient * client, int32_t fd, uint32_t operation);
+int32_t VFS_lchown(App * app, AppServerClient * client, String const * filename, uint32_t owner, uint32_t group);
+int32_t VFS_link(App * app, AppServerClient * client, String const * name1, String const * name2);
+int32_t VFS_lseek(App * app, AppServerClient * client, int32_t fd, int32_t offset, int32_t whence);
+int32_t VFS_mkdir(App * app, AppServerClient * client, String const * filename, uint32_t mode);
+int32_t VFS_open(App * app, AppServerClient * client, String const * filename, uint32_t flags, uint32_t mode);
+int32_t VFS_opendir(App * app, AppServerClient * client, String const * filename);
+int32_t VFS_read(App * app, AppServerClient * client, int32_t fd, Buffer * buf, uint32_t size);
+int32_t VFS_readdir(App * app, AppServerClient * client, int32_t dir, String ** de);
+int32_t VFS_rename(App * app, AppServerClient * client, String const * from, String const * to);
+int32_t VFS_rewinddir(App * app, AppServerClient * client, int32_t dir);
+int32_t VFS_rmdir(App * app, AppServerClient * client, String const * filename);
+int32_t VFS_symlink(App * app, AppServerClient * client, String const * name1, String const * name2);
+uint32_t VFS_umask(App * app, AppServerClient * client, uint32_t mode);
+int32_t VFS_unlink(App * app, AppServerClient * client, String const * filename);
+int32_t VFS_write(App * app, AppServerClient * client, int32_t fd, Buffer const * buffer, uint32_t size);
 
 #endif /* !VFS_VFS_H */
