@@ -71,6 +71,7 @@ typedef struct _App
 { \
 	String * path; \
 	int res; \
+	(void) client; \
 	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
 		return -VFS_EPROTO; \
 	res = name(path); \
@@ -84,6 +85,7 @@ typedef struct _App
 	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2) \
 { \
 	int res; \
+	(void) client; \
 	if((res = name(arg1, arg2)) != 0) \
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0); \
 	return res; \
@@ -95,6 +97,7 @@ typedef struct _App
 { \
 	String * path; \
 	int res; \
+	(void) client; \
 	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
 		return -VFS_EPROTO; \
 	res = name(path, arg2, arg3); \
