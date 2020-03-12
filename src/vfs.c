@@ -77,6 +77,18 @@ typedef struct _App
 	return 0; \
 }
 
+#define VFS_STUB_FILEDESC_OTHER_OTHER(type, name, type1, fd, type2, arg2, \
+		type3, arg3) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 fd, \
+			type2 arg2, type3 arg3) \
+{ \
+	if(!_vfs_check(vfs, client, fd)) \
+		return -VFS_EPROTO; \
+	if(name(fd, arg2, arg3) != 0) \
+		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0); \
+	return 0; \
+}
+
 #define VFS_STUB_FILENAME(type, name, type1, filename) \
 	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 filename) \
 { \
@@ -191,6 +203,8 @@ VFS_STUB_FILENAME_OTHER(int32_t, chmod, String const *, filename,
 VFS_STUB_FILENAME_OTHER_OTHER(int32_t, chown, String const *, filename,
 		uint32_t, owner, uint32_t, group)
 VFS_STUB_FILEDESC_OTHER(int32_t, fchmod, int32_t, fd, uint32_t, mode)
+VFS_STUB_FILEDESC_OTHER_OTHER(int32_t, fchown, int32_t, fd, uint32_t, owner,
+		uint32_t, group)
 VFS_STUB_FILEDESC_OTHER(int32_t, flock, int32_t, fd, uint32_t, operation)
 VFS_STUB_FILENAME_OTHER_OTHER(int32_t, lchown, String const *, filename,
 		uint32_t, owner, uint32_t, group)
@@ -268,18 +282,6 @@ int32_t VFS_dirfd(VFS * vfs, AppServerClient * client, int32_t dir)
 	fprintf(stderr, "DEBUG: %s(%d)\n", __func__, dir);
 #endif
 	return dir;
-}
-
-
-/* VFS_fchown */
-int32_t VFS_fchown(VFS * vfs, AppServerClient * client, int32_t fd,
-		uint32_t owner, uint32_t group)
-{
-	if(!_vfs_check(vfs, client, fd))
-		return -VFS_EPROTO;
-	if(fchown(fd, owner, group) != 0)
-		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
-	return 0;
 }
 
 
