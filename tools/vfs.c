@@ -458,27 +458,26 @@ int closedir(DIR * dir)
 	_libvfs_init();
 #ifndef dirfd
 	fd = d->fd;
-	if(d->dir != NULL)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		ret = old_closedir(d->dir);
-	else
 #else
 	fd = dirfd(dir);
-#endif
 	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
-		return old_closedir(dir);
+		ret = old_closedir(dir);
+#endif
 	else if(appclient_call(appclient, (void **)&ret, "closedir", fd) != 0)
-		return -1;
+		ret = -1;
 	else if(ret == 0)
 		_libvfs_deregister_fd(appclient, fd);
-#ifdef DEBUG
-	fprintf(stderr, "DEBUG: closedir(%p) => %d\n", (void *)dir, ret);
-#endif
 #ifndef dirfd
 	free(d);
 #else
 	/* XXX not really closed because the fd is wrong */
 	dirfd(dir) = -1;
 	old_closedir(dir);
+#endif
+#ifdef DEBUG
+	fprintf(stderr, "DEBUG: closedir(%p) => %d\n", (void *)dir, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -492,18 +491,20 @@ int dirfd(DIR * dir)
 {
 	int ret;
 	VFSDIR * d = (VFSDIR *)dir;
+	int fd;
 
 	_libvfs_init();
-	if(d->dir != NULL)
-		ret = old_dirfd(d->dir);
-	else if(appclient_call(appclient, (void **)&ret, "dirfd", d->fd) != 0)
+	fd = d->fd;
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
+		return old_dirfd(d->dir);
+	else if(appclient_call(appclient, (void **)&ret, "dirfd", fd) != 0)
 		return -1;
 # ifdef DEBUG
 	fprintf(stderr, "DEBUG: dirfd(%p) => %d\n", (void *)dir, ret);
 # endif
 	if(ret < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
-	return ret + _vfs_offset;
+	return d->fd;
 }
 #endif
 
@@ -727,43 +728,43 @@ DIR * opendir(char const * path)
 #endif
 {
 #ifndef dirfd
-	VFSDIR * dir;
+	VFSDIR * d;
 	String const * p;
 	AppClient * appclient;
 
 	_libvfs_init();
-	if((dir = malloc(sizeof(*dir))) == NULL)
+	if((d = malloc(sizeof(*dir))) == NULL)
 		return NULL;
 	if(_libvfs_is_remote(path) == 0)
 	{
-		dir->dir = old_opendir(path);
-		dir->fd = -1;
+		d->dir = old_opendir(path);
+		d->fd = -1;
 	}
 	else if((p = _libvfs_get_remote_path(path)) == NULL)
-		return -1;
+		return NULL;
 	else if((appclient = _libvfs_get_appclient(path)) == NULL)
-		return -1;
+		return NULL;
 	else
 	{
-		dir->dir = NULL;
-		if(appclient_call(appclient, &dir->fd, "opendir", p) != 0
-				|| dir->fd < 0)
+		d->dir = NULL;
+		if(appclient_call(appclient, &d->fd, "opendir", p) != 0
+				|| d->fd < 0)
 		{
 			free(dir);
 			return NULL;
 		}
 # ifdef DEBUG
 		fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", p,
-				(void *)dir, dir->fd);
+				(void *)dir, d->fd);
 # endif
-		if(_libvfs_register_fd(appclient, &dir->fd) != 0)
+		if(_libvfs_register_fd(appclient, &d->fd) != 0)
 		{
-			appclient_call(appclient, NULL, "closedir", dir->fd);
+			appclient_call(appclient, NULL, "closedir", d->fd);
 			free(dir);
 			return NULL;
 		}
 	}
-	return (DIR *)dir;
+	return (DIR *)d;
 #else
 	DIR * dir;
 	int fd;
@@ -856,7 +857,7 @@ struct dirent * readdir(DIR * dir)
 #else
 	if(dirfd(dir) < _vfs_offset)
 		return old_readdir(dir);
-	fd = dirfd(dir) - _vfs_offset;
+	fd = dirfd(dir);
 #endif
 	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		return NULL;
@@ -934,8 +935,7 @@ void rewinddir(DIR * dir)
 	if(d->dir != NULL)
 		old_rewinddir(d->dir);
 #else
-	fd = dirfd(dir) - _vfs_offset;
-	if(fd < 0)
+	if((fd = dirfd(dir)) < _vfs_offset)
 		old_rewinddir(dir);
 #endif
 	else if((appclient = _libvfs_get_appclient_fd(&fd)) != NULL)
