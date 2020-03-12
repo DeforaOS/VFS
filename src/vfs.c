@@ -66,13 +66,13 @@ typedef struct _App
 
 
 /* macros */
-#define VFS_STUB1(type, name, type1, arg1) \
-	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1) \
+#define VFS_STUB_FILENAME(type, name, type1, filename) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 filename) \
 { \
 	String * path; \
 	int res; \
 	(void) client; \
-	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
+	if((path = _vfs_get_realpath(vfs, filename)) == NULL) \
 		return -VFS_EPROTO; \
 	res = name(path); \
 	string_delete(path); \
@@ -81,8 +81,25 @@ typedef struct _App
 	return 0; \
 }
 
+#define VFS_STUB_FILENAME_OTHER(type, name, type1, filename, type2, arg2) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 filename, \
+			type2 arg2) \
+{ \
+	String * path; \
+	int res; \
+	(void) client; \
+	if((path = _vfs_get_realpath(vfs, filename)) == NULL) \
+		return -VFS_EPROTO; \
+	res = name(filename, arg2); \
+	string_delete(path); \
+	if(res != 0) \
+		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0); \
+	return res; \
+}
+
 #define VFS_STUB2(type, name, type1, arg1, type2, arg2) \
-	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, \
+			type2 arg2) \
 { \
 	int res; \
 	(void) client; \
@@ -91,14 +108,15 @@ typedef struct _App
 	return res; \
 }
 
-#define VFS_STUB3(type, name, type1, arg1, type2, arg2, type3, arg3) \
-	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 arg1, type2 arg2, \
-			type3 arg3) \
+#define VFS_STUB_FILENAME_OTHER_OTHER(type, name, type1, filename, \
+		type2, arg2, type3, arg3) \
+	type VFS_ ## name(VFS * vfs, AppServerClient * client, type1 filename, \
+			type2 arg2, type3 arg3) \
 { \
 	String * path; \
 	int res; \
 	(void) client; \
-	if((path = _vfs_get_realpath(vfs, arg1)) == NULL) \
+	if((path = _vfs_get_realpath(vfs, filename)) == NULL) \
 		return -VFS_EPROTO; \
 	res = name(path, arg2, arg3); \
 	string_delete(path); \
@@ -157,16 +175,17 @@ int vfs(AppServerOptions options, char const * name, mode_t mask,
 
 
 /* stubs */
-VFS_STUB2(int32_t, chmod, String const *, filename, uint32_t, mode)
-VFS_STUB3(int32_t, chown, String const *, filename, uint32_t, owner, uint32_t,
-		group)
-VFS_STUB3(int32_t, lchown, String const *, filename, uint32_t, owner, uint32_t,
-		group)
+VFS_STUB_FILENAME_OTHER(int32_t, chmod, String const *, filename,
+		uint32_t, mode)
+VFS_STUB_FILENAME_OTHER_OTHER(int32_t, chown, String const *, filename,
+		uint32_t, owner, uint32_t, group)
+VFS_STUB_FILENAME_OTHER_OTHER(int32_t, lchown, String const *, filename,
+		uint32_t, owner, uint32_t, group)
 VFS_STUB2(int32_t, link, String const *, name1, String const *, name2)
 VFS_STUB2(int32_t, rename, String const *, from, String const *, to)
-VFS_STUB1(int32_t, rmdir, String const *, filename)
+VFS_STUB_FILENAME(int32_t, rmdir, String const *, filename)
 VFS_STUB2(int32_t, symlink, String const *, name1, String const *, name2)
-VFS_STUB1(int32_t, unlink, String const *, filename)
+VFS_STUB_FILENAME(int32_t, unlink, String const *, filename)
 
 
 /* interface */
