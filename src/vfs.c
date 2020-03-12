@@ -190,6 +190,8 @@ VFS_STUB_FILENAME_OTHER(int32_t, chmod, String const *, filename,
 		uint32_t, mode)
 VFS_STUB_FILENAME_OTHER_OTHER(int32_t, chown, String const *, filename,
 		uint32_t, owner, uint32_t, group)
+VFS_STUB_FILEDESC_OTHER(int32_t, fchmod, int32_t, fd, uint32_t, mode)
+VFS_STUB_FILEDESC_OTHER(int32_t, flock, int32_t, fd, uint32_t, operation)
 VFS_STUB_FILENAME_OTHER_OTHER(int32_t, lchown, String const *, filename,
 		uint32_t, owner, uint32_t, group)
 VFS_STUB2(int32_t, link, String const *, name1, String const *, name2)
@@ -269,9 +271,6 @@ int32_t VFS_dirfd(VFS * vfs, AppServerClient * client, int32_t dir)
 }
 
 
-VFS_STUB_FILEDESC_OTHER(int32_t, fchmod, int32_t, fd, uint32_t, mode)
-
-
 /* VFS_fchown */
 int32_t VFS_fchown(VFS * vfs, AppServerClient * client, int32_t fd,
 		uint32_t owner, uint32_t group)
@@ -282,9 +281,6 @@ int32_t VFS_fchown(VFS * vfs, AppServerClient * client, int32_t fd,
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, errno, 0);
 	return 0;
 }
-
-
-VFS_STUB_FILEDESC_OTHER(int32_t, flock, int32_t, fd, uint32_t, operation)
 
 
 /* VFS_lseek */
