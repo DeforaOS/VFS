@@ -118,6 +118,12 @@ ret=INT32
 arg1=STRING,filename
 arg2=UINT32,mode
 
+[call::mknod]
+ret=INT32
+arg1=STRING,filename
+arg2=UINT32,mode
+arg3=UINT32,dev
+
 [call::open]
 ret=INT32
 arg1=STRING,filename
