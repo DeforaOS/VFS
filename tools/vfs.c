@@ -450,7 +450,7 @@ int closedir(DIR * dir)
 {
 	int ret;
 #ifndef dirfd
-	VFSDIR * d = (VFSDIR*)dir;
+	VFSDIR * d = (VFSDIR *)dir;
 #endif
 	int fd;
 	AppClient * appclient;
@@ -491,7 +491,7 @@ int closedir(DIR * dir)
 int dirfd(DIR * dir)
 {
 	int ret;
-	VFSDIR * d = (VFSDIR*)dir;
+	VFSDIR * d = (VFSDIR *)dir;
 
 	_libvfs_init();
 	if(d->dir != NULL)
@@ -841,7 +841,7 @@ struct dirent * readdir(DIR * dir)
 {
 	static struct dirent de;
 #ifndef dirfd
-	VFSDIR * d = (VFSDIR*)dir;
+	VFSDIR * d = (VFSDIR *)dir;
 #endif
 	int fd;
 	AppClient * appclient;
