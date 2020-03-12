@@ -72,6 +72,7 @@ int32_t VFS_lchown(App * app, AppServerClient * client, String const * filename,
 int32_t VFS_link(App * app, AppServerClient * client, String const * name1, String const * name2);
 int32_t VFS_lseek(App * app, AppServerClient * client, int32_t fd, int32_t offset, int32_t whence);
 int32_t VFS_mkdir(App * app, AppServerClient * client, String const * filename, uint32_t mode);
+int32_t VFS_mknod(App * app, AppServerClient * client, String const * filename, uint32_t mode, uint32_t dev);
 int32_t VFS_open(App * app, AppServerClient * client, String const * filename, uint32_t flags, uint32_t mode);
 int32_t VFS_opendir(App * app, AppServerClient * client, String const * filename);
 int32_t VFS_read(App * app, AppServerClient * client, int32_t fd, Buffer * buf, uint32_t size);
