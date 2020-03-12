@@ -66,6 +66,7 @@ static int (*old_lchown)(char const * path, uid_t uid, gid_t gid);
 static off_t (*old_lseek)(int fd, off_t offset, int whence);
 static int (*old_lstat)(char const * path, struct stat * st);
 static int (*old_mkdir)(char const * path, mode_t mode);
+static int (*old_mknod)(char const * path, mode_t mode, dev_t dev);
 static void * (*old_mmap)(void * addr, size_t len, int prot, int flags, int fd,
 		off_t offset);
 static int (*old_open)(char const * path, int flags, mode_t mode);
@@ -132,6 +133,7 @@ static void _libvfs_init(void)
 			|| (old_lstat = dlsym(hdl, "lstat")) == NULL
 #endif
 			|| (old_mkdir = dlsym(hdl, "mkdir")) == NULL
+			|| (old_mknod = dlsym(hdl, "mknod")) == NULL
 			|| (old_mmap = dlsym(hdl, "mmap")) == NULL
 			|| (old_open = dlsym(hdl, "open")) == NULL
 			|| (old_opendir = dlsym(hdl, "opendir")) == NULL
@@ -483,7 +485,30 @@ int mkdir(char const * path, mode_t mode)
 	if(appclient_call(_appclient, (void **)&ret, "mkdir", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: mkdir(\"%s\", %d) => %d\n", path, mode, ret);
+	fprintf(stderr, "DEBUG: mkdir(\"%s\", %u) => %d\n", path, mode, ret);
+#endif
+	if(ret != 0)
+		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
+	return ret;
+}
+
+
+/* mknod */
+int mknod(char const * path, mode_t mode, dev_t dev)
+{
+	int ret;
+
+	_libvfs_init();
+	if(_libvfs_is_remote(path) == 0)
+		return old_mknod(path, mode, dev);
+	if((path = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	if(appclient_call(_appclient, (void **)&ret, "mknod", path, mode, dev)
+			!= 0)
+		return -1;
+#ifdef DEBUG
+	fprintf(stderr, "DEBUG: mknod(\"%s\", %u, %u) => %d\n", path, mode, dev,
+			ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
