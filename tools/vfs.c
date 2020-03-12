@@ -158,7 +158,11 @@ static void _libvfs_init(void)
 			|| (old_mknod = dlsym(hdl, "mknod")) == NULL
 			|| (old_mmap = dlsym(hdl, "mmap")) == NULL
 			|| (old_open = dlsym(hdl, "open")) == NULL
+#ifdef __NetBSD__
+			|| (old_opendir = dlsym(hdl, "__opendir30")) == NULL
+#else
 			|| (old_opendir = dlsym(hdl, "opendir")) == NULL
+#endif
 			|| (old_read = dlsym(hdl, "read")) == NULL
 #ifdef __NetBSD__
 			|| (old_readdir = dlsym(hdl, "__readdir30")) == NULL
