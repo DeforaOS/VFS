@@ -30,12 +30,24 @@
 #include <System/App.h>
 #include "../src/common.c"
 /* TODO:
- * - use _libvfs_get_remote_host() */
+ * - set the remote umask for each new connection */
 
 
 /* libVFS */
 /* private */
 /* types */
+typedef struct _VFSAppClient
+{
+	String const * name;
+	AppClient * appclient;
+} VFSAppClient;
+
+typedef struct _VFSAppClientFD
+{
+	AppClient * appclient;
+	int32_t fd;
+} VFSAppClientFD;
+
 typedef struct _VFSDIR
 {
 	DIR * dir;
@@ -48,9 +60,13 @@ typedef struct _VFSDIR
 
 
 /* variables */
-static AppClient * _appclient = NULL;
+static VFSAppClient * _vfs_clients = NULL;
+static size_t _vfs_clients_cnt = 0;
 
-static int _vfs_offset = 1024;
+static VFSAppClientFD * _vfs_clients_fd = NULL;
+static size_t _vfs_clients_fd_cnt = 0;
+
+static int32_t _vfs_offset = 1024;
 
 /* local functions */
 static int (*old_access)(char const * path, int mode);
@@ -88,9 +104,15 @@ static ssize_t (*old_write)(int fd, void const * buf, size_t count);
 static void _libvfs_init(void);
 
 /* accessors */
+static AppClient * _libvfs_get_appclient(char const * path);
+static AppClient * _libvfs_get_appclient_fd(int32_t * fd);
 static String * _libvfs_get_remote_host(char const * path);
 static char const * _libvfs_get_remote_path(char const * path);
 static unsigned int _libvfs_is_remote(char const * path);
+
+/* useful */
+static int _libvfs_deregister_fd(AppClient * appclient, int32_t fd);
+static int _libvfs_register_fd(AppClient * appclient, int32_t * fd);
 
 
 /* functions */
@@ -166,11 +188,6 @@ static void _libvfs_init(void)
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s()\n", __func__);
 #endif
-	if((_appclient = appclient_new(NULL, "VFS", NULL)) == NULL)
-	{
-		error_print(PROGNAME);
-		exit(1);
-	}
 #ifdef RLIMIT_NOFILE
 	if(getrlimit(RLIMIT_NOFILE, &r) == 0 && r.rlim_max > _vfs_offset)
 		_vfs_offset = r.rlim_max;
@@ -178,6 +195,55 @@ static void _libvfs_init(void)
 	fprintf(stderr, "DEBUG: %s() %u\n", __func__, _vfs_offset);
 # endif
 #endif
+}
+
+
+/* libvfs_get_appclient */
+static AppClient * _libvfs_get_appclient(char const * path)
+{
+	String * name;
+	size_t i;
+	VFSAppClient * p;
+
+	if((name = _libvfs_get_remote_host(path)) == NULL)
+		return NULL;
+	for(i = 0; i < _vfs_clients_cnt; i++)
+		if(_vfs_clients[i].name != NULL
+				&& string_compare(_vfs_clients[i].name, name)
+				== 0)
+		{
+			string_delete(name);
+			return _vfs_clients[i].appclient;
+		}
+	if((p = realloc(_vfs_clients, sizeof(*_vfs_clients) * (i + 1))) == NULL)
+	{
+		string_delete(name);
+		return NULL;
+	}
+	_vfs_clients = p;
+	p = &_vfs_clients[_vfs_clients_cnt++];
+	if((p->appclient = appclient_new(NULL, "VFS", name)) == NULL)
+	{
+		string_delete(name);
+		return NULL;
+	}
+	p->name = name;
+	return p->appclient;
+}
+
+
+/* libvfs_get_appclient_fd */
+static AppClient * _libvfs_get_appclient_fd(int32_t * fd)
+{
+	size_t i;
+
+	if(*fd < _vfs_offset)
+		return NULL;
+	i = (size_t)*fd - _vfs_offset;
+	if(i >= _vfs_clients_fd_cnt)
+		return NULL;
+	*fd = _vfs_clients_fd[i].fd;
+	return _vfs_clients_fd[i].appclient;
 }
 
 
@@ -232,16 +298,59 @@ static unsigned int _libvfs_is_remote(char const * path)
 }
 
 
+/* useful */
+/* libvfs_deregister_fd */
+static int _libvfs_deregister_fd(AppClient * appclient, int32_t fd)
+{
+	if(fd < 0 || (size_t)fd >= _vfs_clients_fd_cnt)
+		return -1;
+	/* sanity check */
+	if(_vfs_clients_fd[fd].appclient != appclient)
+		return -1;
+	_vfs_clients_fd[fd].appclient = NULL;
+	_vfs_clients_fd[fd].fd = -1;
+	return 0;
+}
+
+
+/* libvfs_register_fd */
+static int _libvfs_register_fd(AppClient * appclient, int32_t * fd)
+{
+	size_t i;
+	VFSAppClientFD * p;
+
+	for(i = 0; i < _vfs_clients_fd_cnt; i++)
+		if(_vfs_clients_fd[i].fd < 0)
+		{
+			_vfs_clients_fd[i].appclient = appclient;
+			_vfs_clients_fd[i].fd = *fd;
+			*fd = _vfs_offset + i;
+			return 0;
+		}
+	if((p = realloc(_vfs_clients_fd, sizeof(*p) * (i + 1))) == NULL)
+		return -1;
+	_vfs_clients_fd = p;
+	p = &_vfs_clients_fd[_vfs_clients_fd_cnt++];
+	p->appclient = appclient;
+	p->fd = *fd;
+	*fd = _vfs_offset + i;
+	return 0;
+}
+
+
 /* public */
 /* interface */
 /* access */
 int access(const char * path, int mode)
 {
 	int ret;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_access(path, mode);
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
 	if((path = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
 	if((mode = _vfs_flags(_vfs_flags_access, _vfs_flags_access_cnt, mode,
@@ -250,7 +359,7 @@ int access(const char * path, int mode)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, (void **)&ret, "access", path, mode) != 0)
+	if(appclient_call(appclient, (void **)&ret, "access", path, mode) != 0)
 		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: access(\"%s\", %o) => %d\n", path, mode, ret);
@@ -263,16 +372,20 @@ int access(const char * path, int mode)
 int chmod(char const * path, mode_t mode)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_chmod(path, mode);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "chmod", path, mode) != 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "chmod", p, mode) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: chmod(\"%s\", %o) => %d\n", path, mode, ret);
+	fprintf(stderr, "DEBUG: chmod(\"%s\", %o) => %d\n", p, mode, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -284,17 +397,20 @@ int chmod(char const * path, mode_t mode)
 int chown(char const * path, uid_t uid, gid_t gid)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_chown(path, uid, gid);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "chown", path, uid, gid)
-			!= 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "chown", p, uid, gid) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: chown(\"%s\", %d, %d) => %d\n", path, uid, gid,
+	fprintf(stderr, "DEBUG: chown(\"%s\", %d, %d) => %d\n", p, uid, gid,
 			ret);
 #endif
 	if(ret != 0)
@@ -307,18 +423,20 @@ int chown(char const * path, uid_t uid, gid_t gid)
 int close(int fd)
 {
 	int ret;
+	AppClient * appclient;
 
 	_libvfs_init();
-	if(fd < _vfs_offset)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		return old_close(fd);
-	if(appclient_call(_appclient, (void **)&ret, "close", fd - _vfs_offset)
-			!= 0)
+	if(appclient_call(appclient, (void **)&ret, "close", fd) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: close(%d) => %d\n", fd - _vfs_offset, ret);
+	fprintf(stderr, "DEBUG: close(%p:%d) => %d\n", appclient, fd, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
+	else
+		_libvfs_deregister_fd(appclient, fd);
 	return ret;
 }
 
@@ -331,19 +449,23 @@ int closedir(DIR * dir)
 	VFSDIR * d = (VFSDIR*)dir;
 #endif
 	int fd;
+	AppClient * appclient;
 
 	_libvfs_init();
 #ifndef dirfd
 	fd = d->fd;
 	if(d->dir != NULL)
 		ret = old_closedir(d->dir);
+	else
 #else
-	fd = dirfd(dir) - _vfs_offset;
-	if(fd < 0)
-		return old_closedir(dir);
+	fd = dirfd(dir);
 #endif
-	else if(appclient_call(_appclient, (void **)&ret, "closedir", fd) != 0)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
+		return old_closedir(dir);
+	else if(appclient_call(appclient, (void **)&ret, "closedir", fd) != 0)
 		return -1;
+	else if(ret == 0)
+		_libvfs_deregister_fd(appclient, fd);
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: closedir(%p) => %d\n", (void *)dir, ret);
 #endif
@@ -370,7 +492,7 @@ int dirfd(DIR * dir)
 	_libvfs_init();
 	if(d->dir != NULL)
 		ret = old_dirfd(d->dir);
-	else if(appclient_call(_appclient, (void **)&ret, "dirfd", d->fd) != 0)
+	else if(appclient_call(appclient, (void **)&ret, "dirfd", d->fd) != 0)
 		return -1;
 # ifdef DEBUG
 	fprintf(stderr, "DEBUG: dirfd(%p) => %d\n", (void *)dir, ret);
@@ -383,7 +505,11 @@ int dirfd(DIR * dir)
 
 
 /* fstat */
+#ifdef __NetBSD__
+int __fstat50(int fd, struct stat * st)
+#else
 int fstat(int fd, struct stat * st)
+#endif
 {
 	int ret = -1;
 
@@ -405,17 +531,20 @@ int fstat(int fd, struct stat * st)
 int lchown(char const * path, uid_t uid, gid_t gid)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_lchown(path, uid, gid);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "lchown", path, uid, gid)
-			!= 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "lchown", p, uid, gid) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: lchown(\"%s\", %d, %d) => %d\n", path, uid, gid,
+	fprintf(stderr, "DEBUG: lchown(\"%s\", %d, %d) => %d\n", p, uid, gid,
 			ret);
 #endif
 	if(ret != 0)
@@ -428,9 +557,10 @@ int lchown(char const * path, uid_t uid, gid_t gid)
 off_t lseek(int fd, off_t offset, int whence)
 {
 	int ret;
+	AppClient * appclient;
 
 	_libvfs_init();
-	if(fd < _vfs_offset)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		return old_lseek(fd, offset, whence);
 	if((whence = _vfs_flags(_vfs_flags_lseek, _vfs_flags_lseek_cnt, whence,
 					1)) < 0)
@@ -438,11 +568,11 @@ off_t lseek(int fd, off_t offset, int whence)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, (void **)&ret, "lseek", fd - _vfs_offset,
-				offset, whence) != 0)
+	if(appclient_call(appclient, (void **)&ret, "lseek", fd, offset,
+				whence) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: lseek(%d, %ld, %d) => %d\n", fd - _vfs_offset,
+	fprintf(stderr, "DEBUG: lseek(%p:%d, %ld, %d) => %d\n", appclient, fd,
 			offset, whence, ret);
 #endif
 	if(ret < 0)
@@ -452,7 +582,11 @@ off_t lseek(int fd, off_t offset, int whence)
 
 
 /* lstat */
+#ifdef __NetBSD__
 int lstat(char const * path, struct stat * st)
+#else
+int lstat(char const * path, struct stat * st)
+#endif
 {
 	int ret = -1;
 
@@ -476,16 +610,20 @@ int lstat(char const * path, struct stat * st)
 int mkdir(char const * path, mode_t mode)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_mkdir(path, mode);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "mkdir", path, mode) != 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "mkdir", p, mode) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: mkdir(\"%s\", %u) => %d\n", path, mode, ret);
+	fprintf(stderr, "DEBUG: mkdir(\"%s\", %u) => %d\n", p, mode, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -497,17 +635,20 @@ int mkdir(char const * path, mode_t mode)
 int mknod(char const * path, mode_t mode, dev_t dev)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_mknod(path, mode, dev);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "mknod", path, mode, dev)
-			!= 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "mknod", p, mode, dev) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: mknod(\"%s\", %u, %u) => %d\n", path, mode, dev,
+	fprintf(stderr, "DEBUG: mknod(\"%s\", %u, %u) => %d\n", p, mode, dev,
 			ret);
 #endif
 	if(ret != 0)
@@ -517,8 +658,7 @@ int mknod(char const * path, mode_t mode, dev_t dev)
 
 
 /* mmap */
-void * mmap(void * addr, size_t len, int prot, int flags, int fd,
-		off_t offset)
+void * mmap(void * addr, size_t len, int prot, int flags, int fd, off_t offset)
 {
 	_libvfs_init();
 	if(fd < _vfs_offset)
@@ -532,9 +672,11 @@ void * mmap(void * addr, size_t len, int prot, int flags, int fd,
 int open(const char * path, int flags, ...)
 {
 	int ret;
-	int vfsflags;
 	int mode = 0;
 	va_list ap;
+	int vfsflags;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(flags & O_CREAT)
@@ -545,7 +687,9 @@ int open(const char * path, int flags, ...)
 	}
 	if(_libvfs_is_remote(path) == 0)
 		return old_open(path, flags, mode);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
 		return -1;
 	if((vfsflags = _vfs_flags(_vfs_flags_open, _vfs_flags_open_cnt,
 					flags, 1)) < 0)
@@ -553,24 +697,35 @@ int open(const char * path, int flags, ...)
 		errno = EINVAL;
 		return -1;
 	}
-	if(appclient_call(_appclient, (void **)&ret, "open", path, vfsflags,
+	if(appclient_call(appclient, (void **)&ret, "open", p, vfsflags,
 				mode) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: open(\"%s\", %d, %#o) => %d\n", path, flags,
-			mode, ret);
+	fprintf(stderr, "DEBUG: open(\"%s\", %d, %#o) => %d\n", p, flags, mode,
+			ret);
 #endif
 	if(ret < 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
-	return ret + _vfs_offset;
+	if(_libvfs_register_fd(appclient, &ret) != 0)
+	{
+		appclient_call(appclient, NULL, "close", ret);
+		return -1;
+	}
+	return ret;
 }
 
 
 /* opendir */
+#ifdef __NetBSD__
+DIR * __opendir30(char const * path)
+#else
 DIR * opendir(char const * path)
+#endif
 {
 #ifndef dirfd
 	VFSDIR * dir;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if((dir = malloc(sizeof(*dir))) == NULL)
@@ -580,46 +735,63 @@ DIR * opendir(char const * path)
 		dir->dir = old_opendir(path);
 		dir->fd = -1;
 	}
-	else if((path = _libvfs_get_remote_path(path)) == NULL)
+	else if((p = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	else if((appclient = _libvfs_get_appclient(path)) == NULL)
 		return -1;
 	else
 	{
 		dir->dir = NULL;
-		if(appclient_call(_appclient, &dir->fd, "opendir", path) != 0
+		if(appclient_call(appclient, &dir->fd, "opendir", p) != 0
 				|| dir->fd < 0)
 		{
 			free(dir);
 			return NULL;
 		}
 # ifdef DEBUG
-		fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", path,
+		fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", p,
 				(void *)dir, dir->fd);
 # endif
+		if(_libvfs_register_fd(appclient, &dir->fd) != 0)
+		{
+			appclient_call(appclient, NULL, "closedir", dir->fd);
+			free(dir);
+			return NULL;
+		}
 	}
 	return (DIR *)dir;
 #else
 	DIR * dir;
 	int fd;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_opendir(path);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
+		return NULL;
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
 		return NULL;
 	/* XXX find a better way to allocate a DIR structure */
 	if((dir = old_opendir("/")) == NULL)
 		return NULL;
-	if(appclient_call(_appclient, (void **)&fd, "opendir", path) != 0
-			|| fd < 0)
+	if(appclient_call(appclient, (void **)&fd, "opendir", p) != 0 || fd < 0)
 	{
 		old_closedir(dir);
 		return NULL;
 	}
 # ifdef DEBUG
-	fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", path,
-			(void *)dir, fd);
+	fprintf(stderr, "DEBUG: opendir(\"%s\") => %p %d\n", p, (void *)dir,
+			fd);
 # endif
-	dirfd(dir) = fd + _vfs_offset;
+	if(_libvfs_register_fd(appclient, &fd) != 0)
+	{
+		appclient_call(appclient, NULL, "closedir", fd);
+		old_closedir(dir);
+		return NULL;
+	}
+	dirfd(dir) = fd;
 	return dir;
 #endif
 }
@@ -629,22 +801,23 @@ DIR * opendir(char const * path)
 ssize_t read(int fd, void * buf, size_t count)
 {
 	int32_t ret;
+	AppClient * appclient;
 	Buffer * b;
 
 	_libvfs_init();
-	if(fd < _vfs_offset)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		return old_read(fd, buf, count);
-	fd -= _vfs_offset;
 	if((b = buffer_new(0, NULL)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "read", fd, b, count) != 0)
+	if(appclient_call(appclient, (void **)&ret, "read", fd, b, count) != 0)
 	{
 		buffer_delete(b);
 		/* FIXME define errno */
 		return -1;
 	}
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: read(%d, buf, %lu) => %d\n", fd, count, ret);
+	fprintf(stderr, "DEBUG: read(%p:%d, buf, %lu) => %d\n", appclient, fd,
+			count, ret);
 #endif
 	if(ret < 0)
 		ret = _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -656,13 +829,18 @@ ssize_t read(int fd, void * buf, size_t count)
 
 
 /* readdir */
+#ifdef __NetBSD__
+struct dirent * __readdir30(DIR * dir)
+#else
 struct dirent * readdir(DIR * dir)
+#endif
 {
 	static struct dirent de;
 #ifndef dirfd
 	VFSDIR * d = (VFSDIR*)dir;
 #endif
 	int fd;
+	AppClient * appclient;
 	int res;
 	String * filename = NULL;
 
@@ -676,11 +854,14 @@ struct dirent * readdir(DIR * dir)
 		return old_readdir(dir);
 	fd = dirfd(dir) - _vfs_offset;
 #endif
-	if(appclient_call(_appclient, (void **)&res, "readdir", fd, &filename)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
+		return NULL;
+	if(appclient_call(appclient, (void **)&res, "readdir", fd, &filename)
 			!= 0)
 		return NULL;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: readdir(%p %d) => %d\n", (void *)dir, fd, res);
+	fprintf(stderr, "DEBUG: readdir(%p %p:%d) => %d\n", (void *)dir,
+			appclient, fd, res);
 #endif
 	if(res != 0)
 	{
@@ -706,27 +887,27 @@ struct dirent * readdir(DIR * dir)
 int rename(char const * from, char const * to)
 {
 	int ret;
-	int f;
-	int t;
+	String const * fp;
+	String const * tp;
+	AppClient * fac;
+	AppClient * tac;
 
 	_libvfs_init();
-	f = _libvfs_is_remote(from);
-	t = _libvfs_is_remote(to);
-	if(f == 0 && t == 0)
+	fp = _libvfs_get_remote_path(from);
+	tp = _libvfs_get_remote_path(to);
+	if(fp == NULL && tp == NULL)
 		return old_rename(from, to);
-	/* FIXME also compare the remote hosts */
-	if(f != t)
+	fac = _libvfs_get_appclient(from);
+	tac = _libvfs_get_appclient(to);
+	if(fac != tac)
 	{
 		errno = EXDEV;
 		return -1;
 	}
-	if((from = _libvfs_get_remote_path(from)) == NULL
-			|| (to = _libvfs_get_remote_path(to)) == NULL)
-		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "rename", from, to) != 0)
+	if(appclient_call(fac, (void **)&ret, "rename", fp, tp) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: rename(\"%s\", \"%s\") => %d\n", from, to, ret);
+	fprintf(stderr, "DEBUG: rename(\"%s\", \"%s\") => %d\n", fp, tp, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -738,9 +919,10 @@ int rename(char const * from, char const * to)
 void rewinddir(DIR * dir)
 {
 #ifndef dirfd
-	VFSDIR * d = (VFSDIR*)dir;
+	VFSDIR * d = (VFSDIR *)dir;
 #endif
 	int fd;
+	AppClient * appclient;
 
 	_libvfs_init();
 #ifndef dirfd
@@ -752,10 +934,10 @@ void rewinddir(DIR * dir)
 	if(fd < 0)
 		old_rewinddir(dir);
 #endif
-	else
+	else if((appclient = _libvfs_get_appclient_fd(&fd)) != NULL)
 	{
 		/* FIXME handle network errors */
-		appclient_call(_appclient, NULL, "rewinddir", fd);
+		appclient_call(appclient, NULL, "rewinddir", fd);
 #ifdef DEBUG
 		fprintf(stderr, "DEBUG: rewinddir(%p)\n", (void *)dir);
 #endif
@@ -767,16 +949,20 @@ void rewinddir(DIR * dir)
 int rmdir(char const * path)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_rmdir(path);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "rmdir", path) != 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "rmdir", p) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: rmdir(\"%s\") => %d\n", path, ret);
+	fprintf(stderr, "DEBUG: rmdir(\"%s\") => %d\n", p, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -785,19 +971,27 @@ int rmdir(char const * path)
 
 
 /* stat */
+#ifdef __NetBSD__
+int __stat50(char const * path, struct stat * st)
+#else
 int stat(char const * path, struct stat * st)
+#endif
 {
 	int ret = -1;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_stat(path, st);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
+		return -1;
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
 		return -1;
 	/* FIXME implement */
 	errno = ENOSYS;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: stat(\"%s\") => %d\n", path, ret);
+	fprintf(stderr, "DEBUG: stat(\"%s\") => %d\n", p, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -809,17 +1003,28 @@ int stat(char const * path, struct stat * st)
 int symlink(char const * name1, char const * name2)
 {
 	int ret;
+	String const * np1;
+	String const * np2;
+	AppClient * ac1;
+	AppClient * ac2;
 
 	_libvfs_init();
-	if(_libvfs_is_remote(name2) == 0)
-		return old_symlink(name1, name2);
-	if((name2 = _libvfs_get_remote_path(name2)) == NULL)
+	/* FIXME only really check the destination */
+	np1 = _libvfs_get_remote_path(name1);
+	np2 = _libvfs_get_remote_path(name2);
+	if(np1 == NULL && np2 == NULL)
+		return old_symlink(np1, np2);
+	ac1 = _libvfs_get_appclient(name1);
+	ac2 = _libvfs_get_appclient(name2);
+	if(ac1 != ac2)
+	{
+		errno = EXDEV;
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "symlink", name1, name2)
-			!= 0)
+	}
+	if(appclient_call(ac1, (void **)&ret, "symlink", np1, np2) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: symlink(\"%s\", \"%s\") => %d\n", name1, name2,
+	fprintf(stderr, "DEBUG: symlink(\"%s\", \"%s\") => %d\n", np1, np2,
 			ret);
 #endif
 	if(ret != 0)
@@ -830,16 +1035,20 @@ int symlink(char const * name1, char const * name2)
 
 /* umask */
 mode_t umask(mode_t mode)
-	/* FIXME inherently incoherent: cannot return both old states */
+	/* FIXME inherently incoherent: cannot return every old state */
 {
-	unsigned int ret;
+	unsigned int res;
+	size_t i;
 
 	_libvfs_init();
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: umask(%o)\n", mode);
 #endif
-	/* FIXME what to do if it fails? */
-	appclient_call(_appclient, (void **)&ret, "umask", mode);
+	/* XXX ignore failures */
+	for(i = 0; i < _vfs_clients_cnt; i++)
+		if(_vfs_clients[i].appclient != NULL)
+			appclient_call(_vfs_clients[i].appclient, (void **)&res,
+					"umask", mode);
 	return umask(mode);
 }
 
@@ -848,16 +1057,20 @@ mode_t umask(mode_t mode)
 int unlink(char const * path)
 {
 	int ret;
+	String const * p;
+	AppClient * appclient;
 
 	_libvfs_init();
 	if(_libvfs_is_remote(path) == 0)
 		return old_unlink(path);
-	if((path = _libvfs_get_remote_path(path)) == NULL)
+	if((p = _libvfs_get_remote_path(path)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "unlink", path) != 0)
+	if((appclient = _libvfs_get_appclient(path)) == NULL)
+		return -1;
+	if(appclient_call(appclient, (void **)&ret, "unlink", p) != 0)
 		return -1;
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: unlink(\"%s\") => %d\n", path, ret);
+	fprintf(stderr, "DEBUG: unlink(\"%s\") => %d\n", p, ret);
 #endif
 	if(ret != 0)
 		return _vfs_errno(_vfs_error, _vfs_error_cnt, -ret, 1);
@@ -869,23 +1082,21 @@ int unlink(char const * path)
 ssize_t write(int fd, void const * buf, size_t count)
 {
 	int32_t ret;
+	AppClient * appclient;
 	Buffer * b;
 
 	_libvfs_init();
-	if(fd < _vfs_offset)
+	if((appclient = _libvfs_get_appclient_fd(&fd)) == NULL)
 		return old_write(fd, buf, count);
 	if((b = buffer_new(count, buf)) == NULL)
 		return -1;
-	if(appclient_call(_appclient, (void **)&ret, "write", fd - _vfs_offset,
-				b, count)
-			!= 0)
+	if(appclient_call(appclient, (void **)&ret, "write", fd, b, count) != 0)
 	{
 		buffer_delete(b);
 		return -1;
 	}
 #ifdef DEBUG
-	fprintf(stderr, "DEBUG: write(%d, buf, %lu) => %d\n", fd - _vfs_offset,
-			count, ret);
+	fprintf(stderr, "DEBUG: write(%d, buf, %lu) => %d\n", fd, count, ret);
 #endif
 	buffer_delete(b);
 	if(ret < 0)
