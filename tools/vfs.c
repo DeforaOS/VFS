@@ -1049,7 +1049,7 @@ mode_t umask(mode_t mode)
 		if(_vfs_clients[i].appclient != NULL)
 			appclient_call(_vfs_clients[i].appclient, (void **)&res,
 					"umask", mode);
-	return umask(mode);
+	return old_umask(mode);
 }
 
 
