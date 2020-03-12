@@ -209,6 +209,8 @@ VFS_STUB_FILEDESC_OTHER(int32_t, flock, int32_t, fd, uint32_t, operation)
 VFS_STUB_FILENAME_OTHER_OTHER(int32_t, lchown, String const *, filename,
 		uint32_t, owner, uint32_t, group)
 VFS_STUB2(int32_t, link, String const *, name1, String const *, name2)
+VFS_STUB_FILENAME_OTHER_OTHER(int32_t, mknod, String const *, filename,
+		uint32_t, mode, uint32_t, dev)
 VFS_STUB2(int32_t, rename, String const *, from, String const *, to)
 VFS_STUB_FILENAME(int32_t, rmdir, String const *, filename)
 VFS_STUB2(int32_t, symlink, String const *, name1, String const *, name2)
