@@ -492,6 +492,7 @@ int dirfd(DIR * dir)
 	int ret;
 	VFSDIR * d = (VFSDIR *)dir;
 	int fd;
+	AppClient * appclient;
 
 	_libvfs_init();
 	fd = d->fd;
@@ -733,7 +734,7 @@ DIR * opendir(char const * path)
 	AppClient * appclient;
 
 	_libvfs_init();
-	if((d = malloc(sizeof(*dir))) == NULL)
+	if((d = malloc(sizeof(*d))) == NULL)
 		return NULL;
 	if(_libvfs_is_remote(path) == 0)
 	{
@@ -750,7 +751,7 @@ DIR * opendir(char const * path)
 		if(appclient_call(appclient, &d->fd, "opendir", p) != 0
 				|| d->fd < 0)
 		{
-			free(dir);
+			free(d);
 			return NULL;
 		}
 # ifdef DEBUG
@@ -760,7 +761,7 @@ DIR * opendir(char const * path)
 		if(_libvfs_register_fd(appclient, &d->fd) != 0)
 		{
 			appclient_call(appclient, NULL, "closedir", d->fd);
-			free(dir);
+			free(d);
 			return NULL;
 		}
 	}
