@@ -57,6 +57,7 @@ typedef struct _VFSDIR
 
 
 /* constants */
+#define APPINTERFACE	"VFS"
 #define PROGNAME	"libVFS"
 
 
@@ -235,7 +236,7 @@ static AppClient * _libvfs_get_appclient(char const * path)
 	}
 	_vfs_clients = p;
 	p = &_vfs_clients[_vfs_clients_cnt++];
-	if((p->appclient = appclient_new(NULL, "VFS", name)) == NULL)
+	if((p->appclient = appclient_new(NULL, APPINTERFACE, name)) == NULL)
 	{
 		string_delete(name);
 		return NULL;
