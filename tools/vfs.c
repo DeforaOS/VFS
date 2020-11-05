@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -66,7 +67,7 @@ static size_t _vfs_clients_cnt = 0;
 static VFSAppClientFD * _vfs_clients_fd = NULL;
 static size_t _vfs_clients_fd_cnt = 0;
 
-static int32_t _vfs_offset = 1024;
+static int _vfs_offset = 1024;
 
 /* local functions */
 static int (*old_access)(char const * path, int mode);
@@ -193,8 +194,16 @@ static void _libvfs_init(void)
 	fprintf(stderr, "DEBUG: %s()\n", __func__);
 #endif
 #ifdef RLIMIT_NOFILE
-	if(getrlimit(RLIMIT_NOFILE, &r) == 0 && r.rlim_max > _vfs_offset)
-		_vfs_offset = r.rlim_max;
+	if(getrlimit(RLIMIT_NOFILE, &r) == 0)
+	{
+		if(r.rlim_max > INT_MAX)
+		{
+			fprintf(stderr, "%s: %s\n", PROGNAME, strerror(ERANGE));
+			exit(1);
+		}
+		if(_vfs_offset < r.rlim_max)
+			_vfs_offset = (int)r.rlim_max;
+	}
 # ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s() %u\n", __func__, _vfs_offset);
 # endif
