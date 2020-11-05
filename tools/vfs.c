@@ -120,8 +120,8 @@ static int _libvfs_register_fd(AppClient * appclient, int32_t * fd);
 static void _libvfs_init(void)
 {
 	static void * hdl = NULL;
-	static char libc[] = "/lib/libc.so";
-	static char libc6[] = "/lib/libc.so.6";
+	const char libc[] = "/lib/libc.so";
+	const char libc6[] = "/lib/libc.so.6";
 #ifdef RLIMIT_NOFILE
 	struct rlimit r;
 #endif
