@@ -108,7 +108,7 @@ static void _libvfs_init(void);
 /* accessors */
 static AppClient * _libvfs_get_appclient(char const * path);
 static AppClient * _libvfs_get_appclient_fd(int32_t * fd);
-static String * _libvfs_get_remote_host(char const * path);
+static String * _libvfs_get_remote_name(char const * path);
 static char const * _libvfs_get_remote_path(char const * path);
 static unsigned int _libvfs_is_remote(char const * path);
 
@@ -219,12 +219,12 @@ static AppClient * _libvfs_get_appclient(char const * path)
 	size_t i;
 	VFSAppClient * p;
 
-	if((name = _libvfs_get_remote_host(path)) == NULL)
+	if((name = _libvfs_get_remote_name(path)) == NULL)
 		return NULL;
 	for(i = 0; i < _vfs_clients_cnt; i++)
-		if(_vfs_clients[i].name != NULL
-				&& string_compare(_vfs_clients[i].name, name)
-				== 0)
+		if(_vfs_clients[i].name == NULL)
+			continue;
+		else if(string_compare(_vfs_clients[i].name, name) == 0)
 		{
 			string_delete(name);
 			return _vfs_clients[i].appclient;
@@ -261,8 +261,8 @@ static AppClient * _libvfs_get_appclient_fd(int32_t * fd)
 }
 
 
-/* libvfs_get_remote_host */
-static String * _libvfs_get_remote_host(char const * path)
+/* libvfs_get_remote_name */
+static String * _libvfs_get_remote_name(char const * path)
 {
 	char const file[] = "file://";
 	String * ret;
