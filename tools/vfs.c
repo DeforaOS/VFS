@@ -39,7 +39,7 @@
 /* types */
 typedef struct _VFSAppClient
 {
-	String const * name;
+	String * name;
 	AppClient * appclient;
 } VFSAppClient;
 
