@@ -272,15 +272,23 @@ static String * _libvfs_get_remote_name(char const * path)
 		return NULL;
 	if(strncmp(file, path, sizeof(file) - 1) != 0)
 		return NULL;
-	path += sizeof(file) - 1;
-	if((ret = string_new(path)) == NULL)
-		return NULL;
-	if((p = string_find(ret, "/")) == NULL)
+	if(path[sizeof(file) - 1] == '/')
 	{
-		string_delete(ret);
-		return NULL;
+		if((ret = string_new("localhost")) == NULL)
+			return NULL;
 	}
-	*p = '\0';
+	else
+	{
+		path += sizeof(file) - 1;
+		if((ret = string_new(path)) == NULL)
+			return NULL;
+		if((p = string_find(ret, "/")) == NULL)
+		{
+			string_delete(ret);
+			return NULL;
+		}
+		*p = '\0';
+	}
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s(\"%s\") => \"%s\"\n", __func__, path, ret);
 #endif
