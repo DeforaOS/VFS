@@ -185,11 +185,11 @@ static void _libvfs_init(void)
 			|| (old_umask = dlsym(hdl, "umask")) == NULL
 			|| (old_unlink = dlsym(hdl, "unlink")) == NULL
 			|| (old_write = dlsym(hdl, "write")) == NULL)
-		{
-			fprintf(stderr, "%s: %s\n", PROGNAME, dlerror());
-			dlclose(hdl);
-			exit(1);
-		}
+	{
+		fprintf(stderr, "%s: %s\n", PROGNAME, dlerror());
+		dlclose(hdl);
+		exit(1);
+	}
 	dlclose(hdl);
 #ifdef DEBUG
 	fprintf(stderr, "DEBUG: %s()\n", __func__);
