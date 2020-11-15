@@ -58,7 +58,7 @@ typedef struct _VFSDIR
 
 /* constants */
 #define APPINTERFACE	"VFS"
-#define PROGNAME	"libVFS"
+#define PROGNAME	APPINTERFACE
 
 
 /* variables */
